@@ -188,7 +188,7 @@ pub struct FirewheelCtx<B: AudioBackend<ProcessorEvent = E>, E: 'static> {
     config: FirewheelConfig,
 }
 
-impl<B: AudioBackend<ProcessorEvent = E>, E: CustomNodeEvent<E>> FirewheelCtx<B, E> {
+impl<B: AudioBackend<ProcessorEvent = E>, E> FirewheelCtx<B, E> {
     /// Create a new Firewheel context.
     pub fn new(config: FirewheelConfig) -> Self {
         let (to_processor_tx, from_context_rx) =

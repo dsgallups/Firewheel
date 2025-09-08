@@ -71,7 +71,7 @@ impl<E> NodeEvent<E> {
 
 /// An event type associated with an [`AudioNodeProcessor`][crate::node::AudioNodeProcessor].
 #[non_exhaustive]
-pub enum NodeEventType<E = ()> {
+pub enum NodeEventType<E = std::convert::Infallible> {
     Param {
         /// Data for a specific parameter.
         data: ParamData,

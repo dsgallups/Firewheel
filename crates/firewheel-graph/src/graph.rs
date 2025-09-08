@@ -78,29 +78,32 @@ pub(crate) struct AudioGraph<E> {
 
 impl<E> AudioGraph<E>
 where
-    E: CustomNodeEvent<E> + 'static,
-    E::Configuration: 'static,
+    E: 'static,
 {
     pub fn new(config: &FirewheelConfig) -> Self {
         let mut nodes = Arena::with_capacity(config.initial_node_capacity as usize);
 
-        let graph_in_config = ChannelConfig {
-            num_inputs: ChannelCount::ZERO,
-            num_outputs: config.num_graph_inputs,
+        let graph_in_config = DummyNodeConfig {
+            channel_config: ChannelConfig {
+                num_inputs: ChannelCount::ZERO,
+                num_outputs: config.num_graph_inputs,
+            },
         };
 
-        let graph_out_config = ChannelConfig {
-            num_inputs: config.num_graph_outputs,
-            num_outputs: ChannelCount::ZERO,
+        let graph_out_config = DummyNodeConfig {
+            channel_config: ChannelConfig {
+                num_inputs: config.num_graph_outputs,
+                num_outputs: ChannelCount::ZERO,
+            },
         };
 
         let graph_in_id = NodeID(
             nodes.insert(NodeEntry::new(
                 AudioNodeInfo::new()
                     .debug_name("graph_in")
-                    .channel_config(graph_in_config)
+                    .channel_config(graph_in_config.channel_config)
                     .into(),
-                Box::new(E::dummy_node(graph_in_config)),
+                Box::new(Constructor::new(DummyNode, Some(graph_in_config))),
             )),
         );
         nodes[graph_in_id.0].id = graph_in_id;
@@ -109,9 +112,9 @@ where
             nodes.insert(NodeEntry::new(
                 AudioNodeInfo::new()
                     .debug_name("graph_out")
-                    .channel_config(graph_out_config)
+                    .channel_config(graph_out_config.channel_config)
                     .into(),
-                Box::new(E::dummy_node(graph_out_config)),
+                Box::new(Constructor::new(DummyNode, Some(graph_out_config))),
             )),
         );
         nodes[graph_out_id.0].id = graph_out_id;

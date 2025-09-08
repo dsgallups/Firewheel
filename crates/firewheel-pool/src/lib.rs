@@ -1,5 +1,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
+use core::marker::PhantomData;
+
 use firewheel_core::{
     channel_config::NonZeroChannelCount,
     node::{AudioNode, NodeID},
@@ -40,23 +42,24 @@ pub trait FxChain: Default {
     /// connect to.
     /// * `dst_num_channels` - The number of input channels on `dst_node_id`.
     /// * `cx` - The firewheel context.
-    fn construct_and_connect<B: AudioBackend>(
+    fn construct_and_connect<B: AudioBackend<ProcessorEvent = E>, E>(
         &mut self,
         first_node_id: NodeID,
         first_node_num_out_channels: NonZeroChannelCount,
         dst_node_id: NodeID,
         dst_num_channels: NonZeroChannelCount,
-        cx: &mut FirewheelCtx<B>,
+        cx: &mut FirewheelCtx<B, E>,
     ) -> Vec<NodeID>;
 }
 
-struct Worker<N: PoolableNode, FX: FxChain> {
+struct Worker<N: PoolableNode<E>, FX: FxChain, E> {
     first_node_params: N::AudioNode,
     first_node_id: NodeID,
 
     fx_state: FxChainState<FX>,
 
     assigned_worker_id: Option<WorkerID>,
+    _p: PhantomData<E>,
 }
 
 pub struct FxChainState<FX: FxChain> {
@@ -78,13 +81,13 @@ impl Default for WorkerID {
 }
 
 /// A trait describing the first node in an [`AudioNodePool`].
-pub trait PoolableNode {
+pub trait PoolableNode<E> {
     /// The node parameters
-    type AudioNode: AudioNode + Clone + 'static;
+    type AudioNode: AudioNode<E> + Clone + 'static;
 
     /// Return the number of output channels for the given configuration.
     fn num_output_channels(
-        config: Option<&<Self::AudioNode as AudioNode>::Configuration>,
+        config: Option<&<Self::AudioNode as AudioNode<E>>::Configuration>,
     ) -> NonZeroChannelCount;
 
     /// Return `true` if the given parameters signify that the sequence is stopped,
@@ -95,7 +98,7 @@ pub trait PoolableNode {
     /// Return an error if the given `node_id` is invalid.
     fn node_is_stopped<B: AudioBackend>(
         node_id: NodeID,
-        cx: &FirewheelCtx<B>,
+        cx: &FirewheelCtx<B, E>,
     ) -> Result<bool, PoolError>;
 
     /// Return a score of how ready this node is to accept new work.
@@ -106,14 +109,14 @@ pub trait PoolableNode {
     fn worker_score<B: AudioBackend>(
         params: &Self::AudioNode,
         node_id: NodeID,
-        cx: &mut FirewheelCtx<B>,
+        cx: &mut FirewheelCtx<B, E>,
     ) -> Result<u64, PoolError>;
 
     /// Diff the new parameters and push the changes into the event queue.
     fn diff<B: AudioBackend>(
         baseline: &Self::AudioNode,
         new: &Self::AudioNode,
-        event_queue: &mut ContextQueue<B>,
+        event_queue: &mut ContextQueue<B, E>,
     );
 
     /// Notify the node state that a sequence is playing/stopped.
@@ -128,7 +131,7 @@ pub trait PoolableNode {
     fn mark_stopped<B: AudioBackend>(
         stopped: bool,
         node_id: NodeID,
-        cx: &mut FirewheelCtx<B>,
+        cx: &mut FirewheelCtx<B, E>,
     ) -> Result<(), PoolError>;
 
     /// Pause the sequence in the node parameters
@@ -140,15 +143,16 @@ pub trait PoolableNode {
 }
 
 /// A pool of audio node chains that can dynamically be assigned work.
-pub struct AudioNodePool<N: PoolableNode, FX: FxChain> {
+pub struct AudioNodePool<N: PoolableNode<E>, FX: FxChain, E> {
     workers: Vec<Worker<N, FX>>,
     worker_ids: Arena<usize>,
     num_active_workers: usize,
+    _p: PhantomData<E>,
 }
 
-impl<N: PoolableNode, FX: FxChain> AudioNodePool<N, FX>
+impl<E, N: PoolableNode<E>, FX: FxChain> AudioNodePool<N, FX, E>
 where
-    <N::AudioNode as AudioNode>::Configuration: Clone,
+    <N::AudioNode as AudioNode<E>>::Configuration: Clone,
 {
     /// Construct a new sampler pool.
     ///
@@ -162,13 +166,13 @@ where
     /// will connect to.
     /// * `dst_num_channels` - The number of input channels in `dst_node_id`.
     /// * `cx` - The firewheel context.
-    pub fn new<B: AudioBackend>(
+    pub fn new<B: AudioBackend<ProcessorEvent = E>>(
         num_workers: usize,
         first_node: N::AudioNode,
-        first_node_config: Option<<N::AudioNode as AudioNode>::Configuration>,
+        first_node_config: Option<<N::AudioNode as AudioNode<E>>::Configuration>,
         dst_node_id: NodeID,
         dst_num_channels: NonZeroChannelCount,
-        cx: &mut FirewheelCtx<B>,
+        cx: &mut FirewheelCtx<B, E>,
     ) -> Self {
         assert_ne!(num_workers, 0);
 
@@ -204,6 +208,7 @@ where
                 .collect(),
             worker_ids: Arena::with_capacity(num_workers),
             num_active_workers: 0,
+            _p: PhantomData,
         }
     }
 
@@ -225,13 +230,13 @@ where
     /// * `fx_chain` - A closure to add additional nodes to this worker instance.
     ///
     /// This will return an error if `params.playback == PlaybackState::Stop`.
-    pub fn new_worker<B: AudioBackend>(
+    pub fn new_worker<B: AudioBackend<ProcessorEvent = E>>(
         &mut self,
         params: &N::AudioNode,
         #[cfg(feature = "scheduled_events")] time: Option<EventInstant>,
         steal: bool,
-        cx: &mut FirewheelCtx<B>,
-        fx_chain: impl FnOnce(&mut FxChainState<FX>, &mut FirewheelCtx<B>),
+        cx: &mut FirewheelCtx<B, E>,
+        fx_chain: impl FnOnce(&mut FxChainState<FX>, &mut FirewheelCtx<B, E>),
     ) -> Result<NewWorkerResult, NewWorkerError> {
         if N::params_stopped(params) {
             return Err(NewWorkerError::ParameterStateIsStop);
@@ -312,12 +317,12 @@ where
     /// will be removed and the `worker_id` will be invalidated.
     ///
     /// Returns `true` if a worker with the given ID exists, `false` otherwise.
-    pub fn sync_worker_params<B: AudioBackend>(
+    pub fn sync_worker_params<B: AudioBackend<ProcessorEvent = E>>(
         &mut self,
         worker_id: WorkerID,
         params: &N::AudioNode,
         #[cfg(feature = "scheduled_events")] time: Option<EventInstant>,
-        cx: &mut FirewheelCtx<B>,
+        cx: &mut FirewheelCtx<B, E>,
     ) -> bool {
         let Some(idx) = self.worker_ids.get(worker_id.0).copied() else {
             return false;
@@ -352,7 +357,7 @@ where
     /// * `cx` - The Firewheel context
     ///
     /// Returns `true` if a worker with the given ID exists, `false` otherwise.
-    pub fn pause<B: AudioBackend>(
+    pub fn pause<B: AudioBackend<ProcessorEvent = E>>(
         &mut self,
         worker_id: WorkerID,
         #[cfg(feature = "scheduled_events")] time: Option<EventInstant>,
@@ -386,7 +391,7 @@ where
     /// * `cx` - The Firewheel context
     ///
     /// Returns `true` if a worker with the given ID exists, `false` otherwise.
-    pub fn resume<B: AudioBackend>(
+    pub fn resume<B: AudioBackend<ProcessorEvent = E>>(
         &mut self,
         worker_id: WorkerID,
         #[cfg(feature = "scheduled_events")] time: Option<EventInstant>,
@@ -422,7 +427,7 @@ where
     /// This will remove the worker and invalidate the given `worker_id`.
     ///
     /// Returns `true` if a worker with the given ID exists and was stopped.
-    pub fn stop<B: AudioBackend>(
+    pub fn stop<B: AudioBackend<ProcessorEvent = E>>(
         &mut self,
         worker_id: WorkerID,
         #[cfg(feature = "scheduled_events")] time: Option<EventInstant>,
@@ -456,7 +461,7 @@ where
     /// * `time` - The instant that the stop should take effect. If this is
     /// `None`, then the parameters will take effect as soon as the node receives
     /// the event.
-    pub fn pause_all<B: AudioBackend>(
+    pub fn pause_all<B: AudioBackend<ProcessorEvent = E>>(
         &mut self,
         #[cfg(feature = "scheduled_events")] time: Option<EventInstant>,
         cx: &mut FirewheelCtx<B>,
@@ -481,7 +486,7 @@ where
     /// * `time` - The instant that the stop should take effect. If this is
     /// `None`, then the parameters will take effect as soon as the node receives
     /// the event.
-    pub fn resume_all<B: AudioBackend>(
+    pub fn resume_all<B: AudioBackend<ProcessorEvent = E>>(
         &mut self,
         #[cfg(feature = "scheduled_events")] time: Option<EventInstant>,
         cx: &mut FirewheelCtx<B>,
@@ -506,7 +511,7 @@ where
     /// * `time` - The instant that the stop should take effect. If this is
     /// `None`, then the parameters will take effect as soon as the node receives
     /// the event.
-    pub fn stop_all<B: AudioBackend>(
+    pub fn stop_all<B: AudioBackend<ProcessorEvent = E>>(
         &mut self,
         #[cfg(feature = "scheduled_events")] time: Option<EventInstant>,
         cx: &mut FirewheelCtx<B>,
@@ -539,7 +544,7 @@ where
     }
 
     /// Get an immutable reference to the state of the first node of the given worker.
-    pub fn first_node_state<'a, T: 'static, B: AudioBackend>(
+    pub fn first_node_state<'a, T: 'static, B: AudioBackend<ProcessorEvent = E>>(
         &self,
         worker_id: WorkerID,
         cx: &'a FirewheelCtx<B>,
@@ -550,7 +555,7 @@ where
     }
 
     /// Get a mutable reference to the state of the first node of the given worker.
-    pub fn first_node_state_mut<'a, T: 'static, B: AudioBackend>(
+    pub fn first_node_state_mut<'a, T: 'static, B: AudioBackend<ProcessorEvent = E>>(
         &self,
         worker_id: WorkerID,
         cx: &'a mut FirewheelCtx<B>,
@@ -574,7 +579,11 @@ where
 
     /// Returns `true` if the sequence has either not started playing yet or has finished
     /// playing.
-    pub fn has_stopped<B: AudioBackend>(&self, worker_id: WorkerID, cx: &FirewheelCtx<B>) -> bool {
+    pub fn has_stopped<B: AudioBackend<ProcessorEvent = E>>(
+        &self,
+        worker_id: WorkerID,
+        cx: &FirewheelCtx<B>,
+    ) -> bool {
         self.worker_ids
             .get(worker_id.0)
             .map(|idx| N::node_is_stopped(self.workers[*idx].first_node_id, cx).unwrap())
@@ -585,7 +594,10 @@ where
     /// workers which have finished playing.
     ///
     /// Calling this method is optional.
-    pub fn poll<B: AudioBackend>(&mut self, cx: &FirewheelCtx<B>) -> PollResult {
+    pub fn poll<B: AudioBackend<ProcessorEvent = E>>(
+        &mut self,
+        cx: &FirewheelCtx<B>,
+    ) -> PollResult {
         self.num_active_workers = 0;
         let mut finished_workers = SmallVec::new();
 
