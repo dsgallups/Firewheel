@@ -602,7 +602,7 @@ pub trait Patch {
     ///
     /// This is a convenience wrapper around [`patch`][Patch::patch], discarding
     /// errors and node events besides [`NodeEventType::Param`].
-    fn patch_event(event: &NodeEventType) -> Option<Self::Patch> {
+    fn patch_event<E>(event: &NodeEventType<E>) -> Option<Self::Patch> {
         match event {
             NodeEventType::Param { data, path } => Some(Self::patch(data, path).ok()?),
             _ => None,

@@ -5,6 +5,7 @@ use core::{any::Any, fmt::Debug, hash::Hash, num::NonZeroU32};
 #[cfg(not(feature = "std"))]
 use bevy_platform::prelude::{Box, Vec};
 
+use crate::collector::OwnedGc;
 use crate::dsp::buffer::ChannelBuffer;
 use crate::log::RealtimeLogger;
 use crate::{
@@ -265,22 +266,22 @@ impl<'a> ConstructProcessorContext<'a> {
 }
 
 /// A context for [`AudioNode::update`].
-pub struct UpdateContext<'a> {
+pub struct UpdateContext<'a, E = OwnedGc<Box<dyn Any + Send + Sync>>> {
     /// The ID of this audio node.
     pub node_id: NodeID,
     /// Information about the running audio stream. If no audio stream is running,
     /// then this will be `None`.
     pub stream_info: Option<&'a StreamInfo>,
     custom_state: &'a mut Option<Box<dyn Any>>,
-    event_queue: &'a mut Vec<NodeEvent>,
+    event_queue: &'a mut Vec<NodeEvent<E>>,
 }
 
-impl<'a> UpdateContext<'a> {
+impl<'a, E> UpdateContext<'a, E> {
     pub fn new(
         node_id: NodeID,
         stream_info: Option<&'a StreamInfo>,
         custom_state: &'a mut Option<Box<dyn Any>>,
-        event_queue: &'a mut Vec<NodeEvent>,
+        event_queue: &'a mut Vec<NodeEvent<E>>,
     ) -> Self {
         Self {
             node_id,
@@ -291,7 +292,7 @@ impl<'a> UpdateContext<'a> {
     }
 
     /// Queue an event to send to this node's processor counterpart.
-    pub fn queue_event(&mut self, event: NodeEventType) {
+    pub fn queue_event(&mut self, event: NodeEventType<E>) {
         self.event_queue.push(NodeEvent {
             node_id: self.node_id,
             #[cfg(feature = "scheduled_events")]
@@ -309,7 +310,7 @@ impl<'a> UpdateContext<'a> {
     /// another in time then that chunk may be too small for the audio processing to be
     /// fully vectorized.
     #[cfg(feature = "scheduled_events")]
-    pub fn schedule_event(&mut self, event: NodeEventType, time: EventInstant) {
+    pub fn schedule_event(&mut self, event: NodeEventType<E>, time: EventInstant) {
         self.event_queue.push(NodeEvent {
             node_id: self.node_id,
             time: Some(time),
@@ -402,7 +403,7 @@ impl<T: AudioNode> DynAudioNode for Constructor<T, T::Configuration> {
 
 /// The trait describing the realtime processor counterpart to an
 /// audio node.
-pub trait AudioNodeProcessor: 'static + Send {
+pub trait AudioNodeProcessor<E = OwnedGc<Box<dyn Any + Send + Sync>>>: 'static + Send {
     /// Process the given block of audio. Only process data in the
     /// buffers up to `samples`.
     ///
@@ -422,7 +423,7 @@ pub trait AudioNodeProcessor: 'static + Send {
         &mut self,
         info: &ProcInfo,
         buffers: ProcBuffers,
-        events: &mut ProcEvents,
+        events: &mut ProcEvents<E>,
         extra: &mut ProcExtra,
     ) -> ProcessStatus;
 

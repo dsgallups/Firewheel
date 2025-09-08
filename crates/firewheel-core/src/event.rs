@@ -24,7 +24,7 @@ use crate::clock::EventInstant;
 use crate::clock::{DurationMusical, InstantMusical};
 
 /// An event sent to an [`AudioNodeProcessor`][crate::node::AudioNodeProcessor].
-pub struct NodeEvent {
+pub struct NodeEvent<E = OwnedGc<Box<dyn Any + Send + Sync>>> {
     /// The ID of the node that should receive the event.
     pub node_id: NodeID,
     /// Optionally, a time to schedule this event at. If `None`, the event is considered
@@ -32,15 +32,15 @@ pub struct NodeEvent {
     #[cfg(feature = "scheduled_events")]
     pub time: Option<EventInstant>,
     /// The type of event.
-    pub event: NodeEventType,
+    pub event: NodeEventType<E>,
 }
 
-impl NodeEvent {
+impl<E> NodeEvent<E> {
     /// Construct an event to send to an [`AudioNodeProcessor`][crate::node::AudioNodeProcessor].
     ///
     /// * `node_id` - The ID of the node that should receive the event.
     /// * `event` - The type of event.
-    pub const fn new(node_id: NodeID, event: NodeEventType) -> Self {
+    pub const fn new(node_id: NodeID, event: NodeEventType<E>) -> Self {
         Self {
             node_id,
             #[cfg(feature = "scheduled_events")]
@@ -56,7 +56,7 @@ impl NodeEvent {
     /// * `time` - The time to schedule this event at.
     /// * `event` - The type of event.
     #[cfg(feature = "scheduled_events")]
-    pub const fn scheduled(node_id: NodeID, time: EventInstant, event: NodeEventType) -> Self {
+    pub const fn scheduled(node_id: NodeID, time: EventInstant, event: NodeEventType<E>) -> Self {
         Self {
             node_id,
             time: Some(time),
@@ -67,7 +67,7 @@ impl NodeEvent {
 
 /// An event type associated with an [`AudioNodeProcessor`][crate::node::AudioNodeProcessor].
 #[non_exhaustive]
-pub enum NodeEventType {
+pub enum NodeEventType<E = OwnedGc<Box<dyn Any + Send + 'static>>> {
     Param {
         /// Data for a specific parameter.
         data: ParamData,
@@ -75,7 +75,7 @@ pub enum NodeEventType {
         path: ParamPath,
     },
     /// Custom event type stored on the heap.
-    Custom(OwnedGc<Box<dyn Any + Send + 'static>>),
+    Custom(E),
     /// Custom event type stored on the stack as raw bytes.
     CustomBytes([u8; 36]),
     #[cfg(feature = "midi_events")]
@@ -296,17 +296,19 @@ impl TryInto<Notify<()>> for &ParamData {
 }
 
 /// A list of events for an [`AudioNodeProcessor`][crate::node::AudioNodeProcessor].
-pub struct ProcEvents<'a> {
-    immediate_event_buffer: &'a mut [Option<NodeEvent>],
+pub struct ProcEvents<'a, E = OwnedGc<Box<dyn Any + Send + Sync>>> {
+    immediate_event_buffer: &'a mut [Option<NodeEvent<E>>],
     #[cfg(feature = "scheduled_events")]
-    scheduled_event_arena: &'a mut [Option<NodeEvent>],
+    scheduled_event_arena: &'a mut [Option<NodeEvent<E>>],
     indices: &'a mut Vec<ProcEventsIndex>,
 }
 
-impl<'a> ProcEvents<'a> {
+impl<'a, E> ProcEvents<'a, E> {
     pub fn new(
-        immediate_event_buffer: &'a mut [Option<NodeEvent>],
-        #[cfg(feature = "scheduled_events")] scheduled_event_arena: &'a mut [Option<NodeEvent>],
+        immediate_event_buffer: &'a mut [Option<NodeEvent<E>>],
+        #[cfg(feature = "scheduled_events")] scheduled_event_arena: &'a mut [Option<
+            NodeEvent<E>,
+        >],
         indices: &'a mut Vec<ProcEventsIndex>,
     ) -> Self {
         Self {
@@ -322,7 +324,7 @@ impl<'a> ProcEvents<'a> {
     }
 
     /// Iterate over all events, draining the events from the list.
-    pub fn drain<'b>(&'b mut self) -> impl IntoIterator<Item = NodeEventType> + use<'b> {
+    pub fn drain<'b>(&'b mut self) -> impl IntoIterator<Item = NodeEventType<E>> + use<'b, E> {
         self.indices.drain(..).map(|index_type| match index_type {
             ProcEventsIndex::Immediate(i) => {
                 self.immediate_event_buffer[i as usize]
@@ -347,7 +349,7 @@ impl<'a> ProcEvents<'a> {
     #[cfg(feature = "scheduled_events")]
     pub fn drain_with_timestamps<'b>(
         &'b mut self,
-    ) -> impl IntoIterator<Item = (NodeEventType, Option<EventInstant>)> + use<'b> {
+    ) -> impl IntoIterator<Item = (NodeEventType<E>, Option<EventInstant>)> + use<'b, E> {
         self.indices.drain(..).map(|index_type| match index_type {
             ProcEventsIndex::Immediate(i) => {
                 let event = self.immediate_event_buffer[i as usize].take().unwrap();
@@ -395,7 +397,7 @@ impl<'a> ProcEvents<'a> {
     /// Errors produced while constructing patches are simply skipped.
     pub fn drain_patches<'b, T: crate::diff::Patch>(
         &'b mut self,
-    ) -> impl IntoIterator<Item = <T as crate::diff::Patch>::Patch> + use<'b, T> {
+    ) -> impl IntoIterator<Item = <T as crate::diff::Patch>::Patch> + use<'b, T, E> {
         // Ideally this would parameterise the `FnMut` over some `impl From<PatchEvent<T>>`
         // but it would require a marker trait for the `diff::Patch::Patch` assoc type to
         // prevent overlapping impls.
@@ -441,7 +443,7 @@ impl<'a> ProcEvents<'a> {
     #[cfg(feature = "scheduled_events")]
     pub fn drain_patches_with_timestamps<'b, T: crate::diff::Patch>(
         &'b mut self,
-    ) -> impl IntoIterator<Item = (<T as crate::diff::Patch>::Patch, Option<EventInstant>)> + use<'b, T>
+    ) -> impl IntoIterator<Item = (<T as crate::diff::Patch>::Patch, Option<EventInstant>)> + use<'b, T, E>
     {
         // Ideally this would parameterise the `FnMut` over some `impl From<PatchEvent<T>>`
         // but it would require a marker trait for the `diff::Patch::Patch` assoc type to
