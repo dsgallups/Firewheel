@@ -12,7 +12,7 @@ use firewheel_core::{
 #[cfg_attr(feature = "bevy_reflect", derive(bevy_reflect::Reflect))]
 pub struct StereoToMonoNode;
 
-impl AudioNode for StereoToMonoNode {
+impl<E> AudioNode<E> for StereoToMonoNode {
     type Configuration = EmptyConfig;
 
     fn info(&self, _config: &Self::Configuration) -> AudioNodeInfo {
@@ -28,19 +28,19 @@ impl AudioNode for StereoToMonoNode {
         &self,
         _config: &Self::Configuration,
         _cx: ConstructProcessorContext,
-    ) -> impl AudioNodeProcessor {
+    ) -> impl AudioNodeProcessor<E> {
         StereoToMonoProcessor
     }
 }
 
 struct StereoToMonoProcessor;
 
-impl AudioNodeProcessor for StereoToMonoProcessor {
+impl<E> AudioNodeProcessor<E> for StereoToMonoProcessor {
     fn process(
         &mut self,
         info: &ProcInfo,
         buffers: ProcBuffers,
-        _events: &mut ProcEvents,
+        _events: &mut ProcEvents<E>,
         _extra: &mut ProcExtra,
     ) -> ProcessStatus {
         if info.in_silence_mask.all_channels_silent(2)

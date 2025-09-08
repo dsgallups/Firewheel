@@ -58,7 +58,7 @@ impl Default for VolumeNode {
     }
 }
 
-impl AudioNode for VolumeNode {
+impl<E> AudioNode<E> for VolumeNode {
     type Configuration = VolumeNodeConfig;
 
     fn info(&self, config: &Self::Configuration) -> AudioNodeInfo {
@@ -74,7 +74,7 @@ impl AudioNode for VolumeNode {
         &self,
         _config: &Self::Configuration,
         cx: ConstructProcessorContext,
-    ) -> impl AudioNodeProcessor {
+    ) -> impl AudioNodeProcessor<E> {
         let min_gain = self.min_gain.max(0.0);
         let gain = self.volume.amp_clamped(min_gain);
 
@@ -100,12 +100,12 @@ struct VolumeProcessor {
     min_gain: f32,
 }
 
-impl AudioNodeProcessor for VolumeProcessor {
+impl<E> AudioNodeProcessor<E> for VolumeProcessor {
     fn process(
         &mut self,
         info: &ProcInfo,
         buffers: ProcBuffers,
-        events: &mut ProcEvents,
+        events: &mut ProcEvents<E>,
         extra: &mut ProcExtra,
     ) -> ProcessStatus {
         for patch in events.drain_patches::<VolumeNode>() {

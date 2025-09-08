@@ -188,7 +188,7 @@ pub struct FirewheelCtx<B: AudioBackend<ProcessorEvent = E>, E: 'static> {
     config: FirewheelConfig,
 }
 
-impl<B: AudioBackend<ProcessorEvent = E>, E: CustomNodeEvent> FirewheelCtx<B, E> {
+impl<B: AudioBackend<ProcessorEvent = E>, E: CustomNodeEvent<E>> FirewheelCtx<B, E> {
     /// Create a new Firewheel context.
     pub fn new(config: FirewheelConfig) -> Self {
         let (to_processor_tx, from_context_rx) =
@@ -723,8 +723,8 @@ impl<B: AudioBackend<ProcessorEvent = E>, E: 'static> FirewheelCtx<B, E> {
     /// Add a node to the audio graph.
     pub fn add_node<T>(&mut self, node: T, config: Option<T::Configuration>) -> NodeID
     where
-        T: AudioNode + 'static,
-        Constructor<T, T::Configuration>: DynAudioNode<E>,
+        T: AudioNode<E> + 'static,
+        Constructor<T, T::Configuration, E>: DynAudioNode<E>,
     {
         self.graph.add_node(node, config)
     }

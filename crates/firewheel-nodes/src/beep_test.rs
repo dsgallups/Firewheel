@@ -45,7 +45,7 @@ impl Default for BeepTestNode {
     }
 }
 
-impl AudioNode for BeepTestNode {
+impl<E> AudioNode<E> for BeepTestNode {
     type Configuration = EmptyConfig;
 
     fn info(&self, _config: &Self::Configuration) -> AudioNodeInfo {
@@ -61,7 +61,7 @@ impl AudioNode for BeepTestNode {
         &self,
         _config: &Self::Configuration,
         cx: ConstructProcessorContext,
-    ) -> impl AudioNodeProcessor {
+    ) -> impl AudioNodeProcessor<E> {
         Processor {
             phasor: 0.0,
             phasor_inc: self.freq_hz.clamp(20.0, 20_000.0)
@@ -79,12 +79,12 @@ struct Processor {
     enabled: bool,
 }
 
-impl AudioNodeProcessor for Processor {
+impl<E> AudioNodeProcessor<E> for Processor {
     fn process(
         &mut self,
         info: &ProcInfo,
         buffers: ProcBuffers,
-        events: &mut ProcEvents,
+        events: &mut ProcEvents<E>,
         _extra: &mut ProcExtra,
     ) -> ProcessStatus {
         let Some(out) = buffers.outputs.first_mut() else {

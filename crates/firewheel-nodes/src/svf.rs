@@ -171,7 +171,7 @@ impl<const CHANNELS: usize> Default for SvfNode<CHANNELS> {
     }
 }
 
-impl<const CHANNELS: usize> AudioNode for SvfNode<CHANNELS> {
+impl<const CHANNELS: usize, E> AudioNode<E> for SvfNode<CHANNELS> {
     type Configuration = SvfNodeConfig;
 
     fn info(&self, _config: &Self::Configuration) -> AudioNodeInfo {
@@ -187,7 +187,7 @@ impl<const CHANNELS: usize> AudioNode for SvfNode<CHANNELS> {
         &self,
         config: &Self::Configuration,
         cx: ConstructProcessorContext,
-    ) -> impl AudioNodeProcessor {
+    ) -> impl AudioNodeProcessor<E> {
         let cutoff_hz = self
             .cutoff_hz
             .clamp(config.freq_range.start, config.freq_range.end);
@@ -822,12 +822,12 @@ impl<const CHANNELS: usize> Processor<CHANNELS> {
     }
 }
 
-impl<const CHANNELS: usize> AudioNodeProcessor for Processor<CHANNELS> {
+impl<const CHANNELS: usize, E> AudioNodeProcessor<E> for Processor<CHANNELS> {
     fn process(
         &mut self,
         info: &ProcInfo,
         buffers: ProcBuffers,
-        events: &mut ProcEvents,
+        events: &mut ProcEvents<E>,
         extra: &mut ProcExtra,
     ) -> ProcessStatus {
         let mut params_changed = false;

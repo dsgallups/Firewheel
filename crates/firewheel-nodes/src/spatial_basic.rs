@@ -165,7 +165,7 @@ struct ComputedValues {
     gain_r: f32,
 }
 
-impl AudioNode for SpatialBasicNode {
+impl<E> AudioNode<E> for SpatialBasicNode {
     type Configuration = EmptyConfig;
 
     fn info(&self, _config: &Self::Configuration) -> AudioNodeInfo {
@@ -181,7 +181,7 @@ impl AudioNode for SpatialBasicNode {
         &self,
         _config: &Self::Configuration,
         cx: ConstructProcessorContext,
-    ) -> impl AudioNodeProcessor {
+    ) -> impl AudioNodeProcessor<E> {
         let computed_values = self.compute_values();
 
         Processor {
@@ -226,12 +226,12 @@ struct Processor {
     prev_block_was_silent: bool,
 }
 
-impl AudioNodeProcessor for Processor {
+impl<E> AudioNodeProcessor<E> for Processor {
     fn process(
         &mut self,
         info: &ProcInfo,
         buffers: ProcBuffers,
-        events: &mut ProcEvents,
+        events: &mut ProcEvents<E>,
         extra: &mut ProcExtra,
     ) -> ProcessStatus {
         let mut updated = false;

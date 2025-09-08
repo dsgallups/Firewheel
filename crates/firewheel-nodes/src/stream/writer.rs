@@ -290,7 +290,7 @@ impl Drop for StreamWriterState {
     }
 }
 
-impl AudioNode for StreamWriterNode {
+impl<E> AudioNode<E> for StreamWriterNode {
     type Configuration = StreamWriterConfig;
 
     fn info(&self, config: &Self::Configuration) -> AudioNodeInfo {
@@ -307,7 +307,7 @@ impl AudioNode for StreamWriterNode {
         &self,
         config: &Self::Configuration,
         cx: ConstructProcessorContext,
-    ) -> impl AudioNodeProcessor {
+    ) -> impl AudioNodeProcessor<E> {
         Processor {
             cons: None,
             shared_state: ArcGc::clone(
@@ -360,12 +360,12 @@ struct Processor {
     pause_declicker: Declicker,
 }
 
-impl AudioNodeProcessor for Processor {
+impl<E> AudioNodeProcessor<E> for Processor {
     fn process(
         &mut self,
         info: &ProcInfo,
         buffers: ProcBuffers,
-        events: &mut ProcEvents,
+        events: &mut ProcEvents<E>,
         extra: &mut ProcExtra,
     ) -> ProcessStatus {
         for mut event in events.drain() {

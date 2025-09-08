@@ -22,7 +22,7 @@ pub struct DummyNodeConfig {
     pub channel_config: ChannelConfig,
 }
 
-impl AudioNode for DummyNode {
+impl<E> AudioNode<E> for DummyNode {
     type Configuration = DummyNodeConfig;
 
     fn info(&self, config: &Self::Configuration) -> AudioNodeInfo {
@@ -35,20 +35,20 @@ impl AudioNode for DummyNode {
         &self,
         _config: &Self::Configuration,
         _cx: ConstructProcessorContext,
-    ) -> impl AudioNodeProcessor<Self> {
+    ) -> impl AudioNodeProcessor<E> {
         DummyProcessor
     }
 }
 
 struct DummyProcessor;
 
-impl AudioNodeProcessor<DummyNode> for DummyProcessor {
+impl<E> AudioNodeProcessor<E> for DummyProcessor {
     fn process(
         &mut self,
         _info: &ProcInfo,
         _buffers: ProcBuffers,
         //TODO
-        _events: &mut ProcEvents<DummyNode>,
+        _events: &mut ProcEvents<E>,
         _extra: &mut ProcExtra,
     ) -> ProcessStatus {
         ProcessStatus::Bypass

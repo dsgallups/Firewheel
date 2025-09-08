@@ -35,19 +35,19 @@ struct EdgeHash {
 }
 
 ///TODO: move
-pub trait CustomNodeEvent
+pub trait CustomNodeEvent<E>
 where
-    Self: AudioNode + 'static,
+    Self: AudioNode<E> + 'static,
     Self::Configuration: 'static,
 {
-    fn dummy_node(config: ChannelConfig) -> Constructor<Self, Self::Configuration>
+    fn dummy_node(config: ChannelConfig) -> Constructor<Self, Self::Configuration, E>
     where
         Self::Configuration: 'static,
         Self: Sized;
 }
 
-impl CustomNodeEvent for DummyNode {
-    fn dummy_node(config: ChannelConfig) -> Constructor<Self, Self::Configuration>
+impl<E> CustomNodeEvent<E> for DummyNode {
+    fn dummy_node(config: ChannelConfig) -> Constructor<Self, Self::Configuration, E>
     where
         Self: Sized,
     {
@@ -78,7 +78,7 @@ pub(crate) struct AudioGraph<E> {
 
 impl<E> AudioGraph<E>
 where
-    E: CustomNodeEvent + 'static,
+    E: CustomNodeEvent<E> + 'static,
     E::Configuration: 'static,
 {
     pub fn new(config: &FirewheelConfig) -> Self {
@@ -147,8 +147,8 @@ impl<E> AudioGraph<E> {
     /// Add a node to the audio graph.
     pub fn add_node<T>(&mut self, node: T, config: Option<T::Configuration>) -> NodeID
     where
-        T: AudioNode + 'static,
-        Constructor<T, T::Configuration>: DynAudioNode<E>,
+        T: AudioNode<E> + 'static,
+        Constructor<T, T::Configuration, E>: DynAudioNode<E> + 'static,
     {
         self.add_node_constructor(Constructor::new(node, config))
     }
@@ -156,11 +156,11 @@ impl<E> AudioGraph<E> {
     /// Add a node to the audio graph.
     pub fn add_node_constructor<T>(
         &mut self,
-        constructor: Constructor<T, T::Configuration>,
+        constructor: Constructor<T, T::Configuration, E>,
     ) -> NodeID
     where
-        T: AudioNode + 'static,
-        Constructor<T, T::Configuration>: DynAudioNode<E>,
+        T: AudioNode<E> + 'static,
+        Constructor<T, T::Configuration, E>: DynAudioNode<E> + 'static,
     {
         let info: AudioNodeInfoInner = constructor.info().into();
         let call_update_method = info.call_update_method;

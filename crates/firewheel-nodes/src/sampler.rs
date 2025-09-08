@@ -461,7 +461,7 @@ impl RepeatMode {
     }
 }
 
-impl AudioNode for SamplerNode {
+impl<E> AudioNode<E> for SamplerNode {
     type Configuration = SamplerConfig;
 
     fn info(&self, config: &Self::Configuration) -> AudioNodeInfo {
@@ -478,7 +478,7 @@ impl AudioNode for SamplerNode {
         &self,
         config: &Self::Configuration,
         cx: ConstructProcessorContext,
-    ) -> impl AudioNodeProcessor {
+    ) -> impl AudioNodeProcessor<E> {
         let stop_declicker_buffers = if config.num_declickers == 0 {
             None
         } else {
@@ -756,12 +756,12 @@ impl SamplerProcessor {
     }
 }
 
-impl AudioNodeProcessor for SamplerProcessor {
+impl<E> AudioNodeProcessor<E> for SamplerProcessor {
     fn process(
         &mut self,
         info: &ProcInfo,
         buffers: ProcBuffers,
-        events: &mut ProcEvents,
+        events: &mut ProcEvents<E>,
         extra: &mut ProcExtra,
     ) -> ProcessStatus {
         let mut sample_changed = self.is_first_process;

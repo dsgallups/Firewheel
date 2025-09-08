@@ -305,7 +305,7 @@ impl Drop for StreamReaderState {
     }
 }
 
-impl AudioNode for StreamReaderNode {
+impl<E> AudioNode<E> for StreamReaderNode {
     type Configuration = StreamReaderConfig;
 
     fn info(&self, config: &Self::Configuration) -> AudioNodeInfo {
@@ -322,7 +322,7 @@ impl AudioNode for StreamReaderNode {
         &self,
         _config: &Self::Configuration,
         cx: ConstructProcessorContext,
-    ) -> impl AudioNodeProcessor {
+    ) -> impl AudioNodeProcessor<E> {
         Processor {
             prod: None,
             shared_state: ArcGc::clone(
@@ -371,12 +371,12 @@ struct Processor {
     shared_state: ArcGc<SharedState>,
 }
 
-impl AudioNodeProcessor for Processor {
+impl<E> AudioNodeProcessor<E> for Processor {
     fn process(
         &mut self,
         info: &ProcInfo,
         buffers: ProcBuffers,
-        events: &mut ProcEvents,
+        events: &mut ProcEvents<E>,
         _extra: &mut ProcExtra,
     ) -> ProcessStatus {
         for mut event in events.drain() {

@@ -197,7 +197,7 @@ impl<const NUM_CHANNELS: usize> PeakMeterState<NUM_CHANNELS> {
     }
 }
 
-impl<const NUM_CHANNELS: usize> AudioNode for PeakMeterNode<NUM_CHANNELS> {
+impl<const NUM_CHANNELS: usize, E> AudioNode<E> for PeakMeterNode<NUM_CHANNELS> {
     type Configuration = EmptyConfig;
 
     fn info(&self, _config: &Self::Configuration) -> AudioNodeInfo {
@@ -214,7 +214,7 @@ impl<const NUM_CHANNELS: usize> AudioNode for PeakMeterNode<NUM_CHANNELS> {
         &self,
         _config: &Self::Configuration,
         cx: ConstructProcessorContext,
-    ) -> impl AudioNodeProcessor {
+    ) -> impl AudioNodeProcessor<E> {
         Processor {
             params: self.clone(),
             shared_state: ArcGc::clone(
@@ -235,12 +235,12 @@ struct Processor<const NUM_CHANNELS: usize> {
     shared_state: ArcGc<SharedState<NUM_CHANNELS>>,
 }
 
-impl<const NUM_CHANNELS: usize> AudioNodeProcessor for Processor<NUM_CHANNELS> {
+impl<const NUM_CHANNELS: usize, E> AudioNodeProcessor<E> for Processor<NUM_CHANNELS> {
     fn process(
         &mut self,
         info: &ProcInfo,
         buffers: ProcBuffers,
-        events: &mut ProcEvents,
+        events: &mut ProcEvents<E>,
         _extra: &mut ProcExtra,
     ) -> ProcessStatus {
         let was_enabled = self.params.enabled;

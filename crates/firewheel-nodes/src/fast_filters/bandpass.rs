@@ -69,7 +69,7 @@ impl<const CHANNELS: usize> Default for FastBandpassNode<CHANNELS> {
     }
 }
 
-impl<const CHANNELS: usize> AudioNode for FastBandpassNode<CHANNELS> {
+impl<const CHANNELS: usize, E> AudioNode<E> for FastBandpassNode<CHANNELS> {
     type Configuration = EmptyConfig;
 
     fn info(&self, _config: &Self::Configuration) -> AudioNodeInfo {
@@ -85,7 +85,7 @@ impl<const CHANNELS: usize> AudioNode for FastBandpassNode<CHANNELS> {
         &self,
         _config: &Self::Configuration,
         cx: ConstructProcessorContext,
-    ) -> impl AudioNodeProcessor {
+    ) -> impl AudioNodeProcessor<E> {
         let sample_rate_recip = cx.stream_info.sample_rate_recip as f32;
 
         let cutoff_hz = self.cutoff_hz.clamp(MIN_HZ, MAX_HZ);
@@ -126,12 +126,12 @@ struct Processor<const CHANNELS: usize> {
     coeff_update_mask: CoeffUpdateMask,
 }
 
-impl<const CHANNELS: usize> AudioNodeProcessor for Processor<CHANNELS> {
+impl<const CHANNELS: usize, E> AudioNodeProcessor<E> for Processor<CHANNELS> {
     fn process(
         &mut self,
         info: &ProcInfo,
         buffers: ProcBuffers,
-        events: &mut ProcEvents,
+        events: &mut ProcEvents<E>,
         extra: &mut ProcExtra,
     ) -> ProcessStatus {
         let mut cutoff_changed = false;

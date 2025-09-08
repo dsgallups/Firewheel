@@ -71,7 +71,7 @@ impl<E> NodeEvent<E> {
 
 /// An event type associated with an [`AudioNodeProcessor`][crate::node::AudioNodeProcessor].
 #[non_exhaustive]
-pub enum NodeEventType<E = OwnedGc<Box<dyn Any + Send + 'static>>> {
+pub enum NodeEventType<E = ()> {
     Param {
         /// Data for a specific parameter.
         data: ParamData,
@@ -79,14 +79,29 @@ pub enum NodeEventType<E = OwnedGc<Box<dyn Any + Send + 'static>>> {
         path: ParamPath,
     },
     /// Custom event type stored on the heap.
-    Custom(E),
+    Custom(OwnedGc<Box<dyn Any + Send + 'static>>),
+    /// A user defined event type
+    DirectVariant(E),
     /// Custom event type stored on the stack as raw bytes.
     CustomBytes([u8; 36]),
     #[cfg(feature = "midi_events")]
     MIDI(MidiMessage<'static>),
 }
 
-impl NodeEventType {
+impl<E> NodeEventType<E> {
+    pub fn direct_mut(&mut self) -> Option<&mut E> {
+        match self {
+            NodeEventType::DirectVariant(e) => Some(e),
+            _ => None,
+        }
+    }
+    pub fn as_direct(&self) -> Option<&E> {
+        match self {
+            NodeEventType::DirectVariant(e) => Some(e),
+            _ => None,
+        }
+    }
+
     pub fn custom<T: Send + 'static>(value: T) -> Self {
         Self::Custom(OwnedGc::new(Box::new(value)))
     }

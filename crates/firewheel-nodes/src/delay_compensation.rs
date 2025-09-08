@@ -34,7 +34,7 @@ impl Default for DelayCompNodeConfig {
 #[cfg_attr(feature = "bevy_reflect", derive(bevy_reflect::Reflect))]
 pub struct DelayCompensationNode;
 
-impl AudioNode for DelayCompensationNode {
+impl<E> AudioNode<E> for DelayCompensationNode {
     type Configuration = DelayCompNodeConfig;
 
     fn info(&self, config: &Self::Configuration) -> AudioNodeInfo {
@@ -50,7 +50,7 @@ impl AudioNode for DelayCompensationNode {
         &self,
         config: &Self::Configuration,
         _cx: ConstructProcessorContext,
-    ) -> impl AudioNodeProcessor {
+    ) -> impl AudioNodeProcessor<E> {
         let channels = config.channels.get().get() as usize;
         let buffer_len = channels * config.delay_frames;
 
@@ -74,12 +74,12 @@ struct Processor {
     num_silent_frames_per_channel: SmallVec<[usize; 4]>,
 }
 
-impl AudioNodeProcessor for Processor {
+impl<E> AudioNodeProcessor<E> for Processor {
     fn process(
         &mut self,
         info: &ProcInfo,
         buffers: ProcBuffers,
-        _events: &mut ProcEvents,
+        _events: &mut ProcEvents<E>,
         _extra: &mut ProcExtra,
     ) -> ProcessStatus {
         if self.delay_frames == 0 {

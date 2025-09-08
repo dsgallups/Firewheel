@@ -58,7 +58,7 @@ impl Default for WhiteNoiseGenConfig {
     }
 }
 
-impl AudioNode for WhiteNoiseGenNode {
+impl<E> AudioNode<E> for WhiteNoiseGenNode {
     type Configuration = WhiteNoiseGenConfig;
 
     fn info(&self, _config: &Self::Configuration) -> AudioNodeInfo {
@@ -74,7 +74,7 @@ impl AudioNode for WhiteNoiseGenNode {
         &self,
         config: &Self::Configuration,
         cx: ConstructProcessorContext,
-    ) -> impl AudioNodeProcessor {
+    ) -> impl AudioNodeProcessor<E> {
         // Seed cannot be zero.
         let seed = if config.seed == 0 { 17 } else { config.seed };
 
@@ -100,12 +100,12 @@ struct Processor {
     gain: SmoothedParam,
 }
 
-impl AudioNodeProcessor for Processor {
+impl<E> AudioNodeProcessor<E> for Processor {
     fn process(
         &mut self,
         info: &ProcInfo,
         buffers: ProcBuffers,
-        events: &mut ProcEvents,
+        events: &mut ProcEvents<E>,
         _extra: &mut ProcExtra,
     ) -> ProcessStatus {
         for patch in events.drain_patches::<WhiteNoiseGenNode>() {

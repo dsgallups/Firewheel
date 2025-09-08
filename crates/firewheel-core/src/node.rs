@@ -192,7 +192,7 @@ pub struct AudioNodeInfoInner {
 /// may or may not be dropped. The user may try to create a new audio stream, in which
 /// case [`AudioNode::construct_processor`] might be called again. If a second processor
 /// instance is not able to be created, then the node may panic.
-pub trait AudioNode {
+pub trait AudioNode<E> {
     /// A type representing this constructor's configuration.
     ///
     /// This is intended as a one-time configuration to be used
@@ -214,7 +214,7 @@ pub trait AudioNode {
         &self,
         configuration: &Self::Configuration,
         cx: ConstructProcessorContext,
-    ) -> impl AudioNodeProcessor<Self>
+    ) -> impl AudioNodeProcessor<E>
     where
         Self: Sized;
 
@@ -223,7 +223,7 @@ pub trait AudioNode {
     ///
     /// * `configuration` - The custom configuration of this node.
     /// * `cx` - A context for interacting with the Firewheel context.
-    fn update(&mut self, configuration: &Self::Configuration, cx: UpdateContext<Self>)
+    fn update(&mut self, configuration: &Self::Configuration, cx: UpdateContext<E>)
     where
         Self: Sized,
     {
@@ -376,33 +376,35 @@ pub trait DynAudioNode<E> {
 /// Pairs constructors with their configurations.
 ///
 /// This is useful for type-erasing an [`AudioNode`].
-pub struct Constructor<T, C> {
+pub struct Constructor<T, C, E> {
     constructor: T,
     configuration: C,
+    _p: PhantomData<E>,
 }
 
-impl<T: AudioNode> Constructor<T, T::Configuration> {
+impl<E, T: AudioNode<E>> Constructor<T, T::Configuration, E> {
     pub fn new(constructor: T, configuration: Option<T::Configuration>) -> Self {
         Self {
             constructor,
             configuration: configuration.unwrap_or_default(),
+            _p: PhantomData,
         }
     }
 }
 
-impl<T: AudioNode> DynAudioNode<T> for Constructor<T, T::Configuration> {
+impl<E, T: AudioNode<E>> DynAudioNode<E> for Constructor<T, T::Configuration, E> {
     fn info(&self) -> AudioNodeInfo {
         self.constructor.info(&self.configuration)
     }
 
-    fn construct_processor(&self, cx: ConstructProcessorContext) -> Box<dyn AudioNodeProcessor<T>> {
+    fn construct_processor(&self, cx: ConstructProcessorContext) -> Box<dyn AudioNodeProcessor<E>> {
         Box::new(
             self.constructor
                 .construct_processor(&self.configuration, cx),
         )
     }
 
-    fn update(&mut self, cx: UpdateContext<T>) {
+    fn update(&mut self, cx: UpdateContext<E>) {
         self.constructor.update(&self.configuration, cx);
     }
 }

@@ -76,7 +76,7 @@ impl Default for VolumePanNode {
     }
 }
 
-impl AudioNode for VolumePanNode {
+impl<E> AudioNode<E> for VolumePanNode {
     type Configuration = VolumeNodeConfig;
 
     fn info(&self, _config: &Self::Configuration) -> AudioNodeInfo {
@@ -92,7 +92,7 @@ impl AudioNode for VolumePanNode {
         &self,
         _config: &Self::Configuration,
         cx: ConstructProcessorContext,
-    ) -> impl AudioNodeProcessor {
+    ) -> impl AudioNodeProcessor<E> {
         let min_gain = self.min_gain.max(0.0);
 
         let (gain_l, gain_r) = self.compute_gains(self.min_gain);
@@ -131,12 +131,12 @@ struct Processor {
     min_gain: f32,
 }
 
-impl AudioNodeProcessor for Processor {
+impl<E> AudioNodeProcessor<E> for Processor {
     fn process(
         &mut self,
         info: &ProcInfo,
         buffers: ProcBuffers,
-        events: &mut ProcEvents,
+        events: &mut ProcEvents<E>,
         _extra: &mut ProcExtra,
     ) -> ProcessStatus {
         let mut updated = false;
