@@ -566,7 +566,7 @@ impl<E> AudioGraph<E> {
         self.needs_compile
     }
 
-    pub(crate) fn on_schedule_send_failed(&mut self, failed_schedule: Box<ScheduleHeapData>) {
+    pub(crate) fn on_schedule_send_failed(&mut self, failed_schedule: Box<ScheduleHeapData<E>>) {
         self.needs_compile = true;
 
         for node in failed_schedule.new_node_processors.iter() {
@@ -583,7 +583,7 @@ impl<E> AudioGraph<E> {
     pub(crate) fn compile(
         &mut self,
         stream_info: &StreamInfo,
-    ) -> Result<Box<ScheduleHeapData>, CompileGraphError> {
+    ) -> Result<Box<ScheduleHeapData<E>>, CompileGraphError> {
         let schedule = self.compile_internal(stream_info.max_block_frames.get() as usize)?;
 
         let mut new_node_processors = Vec::new();

@@ -28,13 +28,13 @@ use crate::processor::{transport::TransportSyncInfo, ProcTransportState};
 
 const MAX_CLUMP_INDICES: usize = 8;
 
-pub(super) struct EventScheduler {
-    immediate_event_buffer: Vec<Option<NodeEvent>>,
+pub(super) struct EventScheduler<E> {
+    immediate_event_buffer: Vec<Option<NodeEvent<E>>>,
     immediate_event_buffer_capacity: usize,
 
     // A slab allocator arena for scheduled node events.
     #[cfg(feature = "scheduled_events")]
-    scheduled_event_arena: Vec<Option<NodeEvent>>,
+    scheduled_event_arena: Vec<Option<NodeEvent<E>>>,
     #[cfg(feature = "scheduled_events")]
     scheduled_event_arena_free_slots: Vec<u32>,
 
@@ -55,7 +55,7 @@ pub(super) struct EventScheduler {
     buffer_out_of_space_mode: BufferOutOfSpaceMode,
 }
 
-impl EventScheduler {
+impl<E> EventScheduler<E> {
     pub fn new(
         immediate_event_buffer_capacity: usize,
         #[cfg(feature = "scheduled_events")] scheduled_event_buffer_capacity: usize,
@@ -95,8 +95,8 @@ impl EventScheduler {
 
     pub fn push_event_group(
         &mut self,
-        event_group: &mut Vec<NodeEvent>,
-        nodes: &mut Arena<NodeEntry>,
+        event_group: &mut Vec<NodeEvent<E>>,
+        nodes: &mut Arena<NodeEntry<E>>,
         logger: &mut RealtimeLogger,
         #[cfg(feature = "scheduled_events")] sample_rate: NonZeroU32,
         #[cfg(feature = "musical_transport")] proc_transport_state: &ProcTransportState,
@@ -121,7 +121,7 @@ impl EventScheduler {
 
     fn push_event(
         &mut self,
-        event: NodeEvent,
+        event: NodeEvent<E>,
         node_data: &mut NodeEventSchedulerData,
         logger: &mut RealtimeLogger,
         #[cfg(feature = "scheduled_events")] sample_rate: NonZeroU32,
@@ -219,7 +219,7 @@ impl EventScheduler {
     }
 
     #[cfg(feature = "scheduled_events")]
-    pub fn node_has_scheduled_events(&self, node_entry: &NodeEntry) -> bool {
+    pub fn node_has_scheduled_events(&self, node_entry: &NodeEntry<E>) -> bool {
         #[cfg(feature = "musical_transport")]
         return node_entry.event_data.num_scheduled_musical_events > 0
             || node_entry.event_data.num_scheduled_non_musical_events > 0;
@@ -229,7 +229,7 @@ impl EventScheduler {
     }
 
     #[cfg(feature = "scheduled_events")]
-    pub fn remove_events_from_removed_nodes(&mut self, nodes: &Arena<NodeEntry>) {
+    pub fn remove_events_from_removed_nodes(&mut self, nodes: &Arena<NodeEntry<E>>) {
         self.truncate_elapsed_events();
 
         self.sorted_event_buffer_indices.retain(|(slot, _)| {
@@ -303,7 +303,7 @@ impl EventScheduler {
     pub fn handle_clear_scheduled_events_event(
         &mut self,
         msgs: &[ClearScheduledEventsEvent],
-        nodes: &mut Arena<NodeEntry>,
+        nodes: &mut Arena<NodeEntry<E>>,
     ) {
         self.truncate_elapsed_events();
 
@@ -455,7 +455,7 @@ impl EventScheduler {
 
     /// Find scheduled events that have elapsed this processing block
     #[cfg(feature = "scheduled_events")]
-    pub fn prepare_process_block(&mut self, proc_info: &ProcInfo, nodes: &mut Arena<NodeEntry>) {
+    pub fn prepare_process_block(&mut self, proc_info: &ProcInfo, nodes: &mut Arena<NodeEntry<E>>) {
         self.sort_events();
 
         let end_samples = proc_info.clock_samples_range().end;
@@ -511,7 +511,7 @@ impl EventScheduler {
     pub fn process_node(
         &mut self,
         node_id: NodeID,
-        node_entry: &mut NodeEntry,
+        node_entry: &mut NodeEntry<E>,
         block_frames: usize,
         clock_samples: InstantSamples,
         info: &mut ProcInfo,
@@ -520,10 +520,10 @@ impl EventScheduler {
         mut proc_buffers: ProcBuffers,
         mut on_sub_chunk: impl FnMut(
             SubChunkInfo,
-            &mut NodeEntry,
+            &mut NodeEntry<E>,
             &mut ProcInfo,
             &mut ProcBuffers,
-            &mut ProcEvents,
+            &mut ProcEvents<E>,
             &mut ProcExtra,
         ),
     ) {

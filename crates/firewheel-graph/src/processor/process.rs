@@ -17,7 +17,7 @@ use crate::{
 #[cfg(feature = "musical_transport")]
 use firewheel_core::clock::ProcTransportInfo;
 
-impl<B: AudioBackend> FirewheelProcessorInner<B> {
+impl<B: AudioBackend, E: 'static> FirewheelProcessorInner<B, E> {
     // TODO: Add a `process_deinterleaved` method.
 
     /// Process the given buffers of audio data.
@@ -234,10 +234,10 @@ impl<B: AudioBackend> FirewheelProcessorInner<B> {
                     &mut self.proc_event_queue,
                     proc_buffers,
                     |sub_chunk_info: SubChunkInfo,
-                     node_entry: &mut NodeEntry,
+                     node_entry: &mut NodeEntry<E>,
                      info: &mut ProcInfo,
                      proc_buffers: &mut ProcBuffers,
-                     events: &mut ProcEvents,
+                     events: &mut ProcEvents<E>,
                      extra: &mut ProcExtra| {
                         let SubChunkInfo {
                             sub_chunk_range,

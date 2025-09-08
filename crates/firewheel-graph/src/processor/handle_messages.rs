@@ -19,7 +19,7 @@ use crate::{
     },
 };
 
-impl<B: AudioBackend> FirewheelProcessorInner<B> {
+impl<B: AudioBackend, E: 'static> FirewheelProcessorInner<B, E> {
     pub fn poll_messages(&mut self) {
         while let Some(msg) = self.from_graph_rx.try_pop() {
             match msg {
@@ -61,7 +61,7 @@ impl<B: AudioBackend> FirewheelProcessorInner<B> {
         }
     }
 
-    fn new_schedule(&mut self, mut new_schedule_data: Box<ScheduleHeapData>) {
+    fn new_schedule(&mut self, mut new_schedule_data: Box<ScheduleHeapData<E>>) {
         assert_eq!(
             new_schedule_data.schedule.max_block_frames(),
             self.max_block_frames

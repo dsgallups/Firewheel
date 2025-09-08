@@ -151,7 +151,7 @@ struct ActiveState<B: AudioBackend> {
 }
 
 /// A Firewheel context
-pub struct FirewheelCtx<B: AudioBackend, E> {
+pub struct FirewheelCtx<B: AudioBackend, E: 'static> {
     graph: AudioGraph<E>,
 
     to_processor_tx: ringbuf::HeapProd<ContextToProcessorMsg<E>>,
@@ -234,7 +234,7 @@ impl<B: AudioBackend, E: CustomNodeEvent> FirewheelCtx<B, E> {
     }
 }
 
-impl<B: AudioBackend, E> FirewheelCtx<B, E> {
+impl<B: AudioBackend, E: 'static> FirewheelCtx<B, E> {
     /// Get a reference to the currently active instance of the backend. Returns `None` if the backend has not
     /// yet been initialized with `start_stream`.
     pub fn active_backend(&self) -> Option<&B> {
@@ -961,7 +961,7 @@ impl<B: AudioBackend, E> FirewheelCtx<B, E> {
     }
 }
 
-impl<B: AudioBackend, E> Drop for FirewheelCtx<B, E> {
+impl<B: AudioBackend, E: 'static> Drop for FirewheelCtx<B, E> {
     fn drop(&mut self) {
         self.stop_stream();
 
@@ -1029,7 +1029,7 @@ impl<B: AudioBackend, E> FirewheelCtx<B, E> {
 /// params.diff(baseline, PathBuilder::default(), &mut queue);
 /// # }
 /// ```
-pub struct ContextQueue<'a, B: AudioBackend, E> {
+pub struct ContextQueue<'a, B: AudioBackend, E: 'static> {
     context: &'a mut FirewheelCtx<B, E>,
     id: NodeID,
     #[cfg(feature = "scheduled_events")]

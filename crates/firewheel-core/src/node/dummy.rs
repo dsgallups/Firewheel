@@ -1,5 +1,8 @@
+use core::any::Any;
+
 use crate::{
     channel_config::ChannelConfig,
+    collector::OwnedGc,
     event::ProcEvents,
     node::{ProcBuffers, ProcExtra},
 };
@@ -32,19 +35,20 @@ impl AudioNode for DummyNode {
         &self,
         _config: &Self::Configuration,
         _cx: ConstructProcessorContext,
-    ) -> impl AudioNodeProcessor {
+    ) -> impl AudioNodeProcessor<Self> {
         DummyProcessor
     }
 }
 
 struct DummyProcessor;
 
-impl AudioNodeProcessor for DummyProcessor {
+impl AudioNodeProcessor<DummyNode> for DummyProcessor {
     fn process(
         &mut self,
         _info: &ProcInfo,
         _buffers: ProcBuffers,
-        _events: &mut ProcEvents,
+        //TODO
+        _events: &mut ProcEvents<DummyNode>,
         _extra: &mut ProcExtra,
     ) -> ProcessStatus {
         ProcessStatus::Bypass

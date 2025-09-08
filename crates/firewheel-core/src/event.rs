@@ -300,7 +300,7 @@ impl TryInto<Notify<()>> for &ParamData {
 }
 
 /// A list of events for an [`AudioNodeProcessor`][crate::node::AudioNodeProcessor].
-pub struct ProcEvents<'a, E = OwnedGc<Box<dyn Any + Send + Sync>>> {
+pub struct ProcEvents<'a, E> {
     immediate_event_buffer: &'a mut [Option<NodeEvent<E>>],
     #[cfg(feature = "scheduled_events")]
     scheduled_event_arena: &'a mut [Option<NodeEvent<E>>],

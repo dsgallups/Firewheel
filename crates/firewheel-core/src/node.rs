@@ -214,7 +214,9 @@ pub trait AudioNode {
         &self,
         configuration: &Self::Configuration,
         cx: ConstructProcessorContext,
-    ) -> impl AudioNodeProcessor;
+    ) -> impl AudioNodeProcessor<Self>
+    where
+        Self: Sized;
 
     /// If [`AudioNodeInfo::call_update_method`] was set to `true`, then the Firewheel
     /// context will call this method on every update cycle.
@@ -360,7 +362,7 @@ pub trait DynAudioNode<E> {
     ///
     /// * `cx` - A context for interacting with the Firewheel context. This context
     /// also includes information about the audio stream.
-    fn construct_processor(&self, cx: ConstructProcessorContext) -> Box<dyn AudioNodeProcessor>;
+    fn construct_processor(&self, cx: ConstructProcessorContext) -> Box<dyn AudioNodeProcessor<E>>;
 
     /// If [`AudioNodeInfo::call_update_method`] was set to `true`, then the Firewheel
     /// context will call this method on every update cycle.
@@ -393,7 +395,7 @@ impl<T: AudioNode> DynAudioNode<T> for Constructor<T, T::Configuration> {
         self.constructor.info(&self.configuration)
     }
 
-    fn construct_processor(&self, cx: ConstructProcessorContext) -> Box<dyn AudioNodeProcessor> {
+    fn construct_processor(&self, cx: ConstructProcessorContext) -> Box<dyn AudioNodeProcessor<T>> {
         Box::new(
             self.constructor
                 .construct_processor(&self.configuration, cx),
@@ -404,10 +406,10 @@ impl<T: AudioNode> DynAudioNode<T> for Constructor<T, T::Configuration> {
         self.constructor.update(&self.configuration, cx);
     }
 }
-
+//= OwnedGc<Box<dyn Any + Send + Sync>>
 /// The trait describing the realtime processor counterpart to an
 /// audio node.
-pub trait AudioNodeProcessor<E = OwnedGc<Box<dyn Any + Send + Sync>>>: 'static + Send {
+pub trait AudioNodeProcessor<E>: 'static + Send {
     /// Process the given block of audio. Only process data in the
     /// buffers up to `samples`.
     ///

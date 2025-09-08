@@ -40,12 +40,12 @@ mod transport;
 #[cfg(feature = "musical_transport")]
 use transport::ProcTransportState;
 
-pub struct FirewheelProcessor<B: AudioBackend, E> {
+pub struct FirewheelProcessor<B: AudioBackend, E: 'static> {
     inner: Option<FirewheelProcessorInner<B, E>>,
     drop_tx: ringbuf::HeapProd<FirewheelProcessorInner<B, E>>,
 }
 
-impl<B: AudioBackend, E> Drop for FirewheelProcessor<B, E> {
+impl<B: AudioBackend, E: 'static> Drop for FirewheelProcessor<B, E> {
     fn drop(&mut self) {
         let Some(mut inner) = self.inner.take() else {
             return;
@@ -87,13 +87,13 @@ impl<B: AudioBackend, E> FirewheelProcessor<B, E> {
 }
 
 pub(crate) struct FirewheelProcessorInner<B: AudioBackend, E> {
-    nodes: Arena<NodeEntry>,
-    schedule_data: Option<Box<ScheduleHeapData>>,
+    nodes: Arena<NodeEntry<E>>,
+    schedule_data: Option<Box<ScheduleHeapData<E>>>,
 
     from_graph_rx: ringbuf::HeapCons<ContextToProcessorMsg<E>>,
     to_graph_tx: ringbuf::HeapProd<ProcessorToContextMsg<E>>,
 
-    event_scheduler: EventScheduler,
+    event_scheduler: EventScheduler<E>,
     proc_event_queue: Vec<ProcEventsIndex>,
 
     sample_rate: NonZeroU32,
@@ -163,15 +163,15 @@ impl<B: AudioBackend, E> FirewheelProcessorInner<B, E> {
     }
 }
 
-pub(crate) struct NodeEntry {
-    pub processor: Box<dyn AudioNodeProcessor>,
+pub(crate) struct NodeEntry<E> {
+    pub processor: Box<dyn AudioNodeProcessor<E>>,
 
     event_data: NodeEventSchedulerData,
 }
 
 pub(crate) enum ContextToProcessorMsg<E> {
     EventGroup(Vec<NodeEvent<E>>),
-    NewSchedule(Box<ScheduleHeapData>),
+    NewSchedule(Box<ScheduleHeapData<E>>),
     HardClipOutputs(bool),
     #[cfg(feature = "musical_transport")]
     SetTransportState(Box<TransportState>),
@@ -181,7 +181,7 @@ pub(crate) enum ContextToProcessorMsg<E> {
 
 pub(crate) enum ProcessorToContextMsg<E> {
     ReturnEventGroup(Vec<NodeEvent<E>>),
-    ReturnSchedule(Box<ScheduleHeapData>),
+    ReturnSchedule(Box<ScheduleHeapData<E>>),
     #[cfg(feature = "musical_transport")]
     ReturnTransportState(Box<TransportState>),
     #[cfg(feature = "scheduled_events")]

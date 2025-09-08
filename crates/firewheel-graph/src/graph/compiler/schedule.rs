@@ -139,26 +139,26 @@ pub(super) struct OutBufferAssignment {
     pub buffer_index: usize,
 }
 
-pub struct NodeHeapData {
+pub struct NodeHeapData<E> {
     pub id: NodeID,
-    pub processor: Box<dyn AudioNodeProcessor>,
+    pub processor: Box<dyn AudioNodeProcessor<E>>,
     //pub event_buffer_indices: Vec<u32>,
 }
 
-pub struct ScheduleHeapData {
+pub struct ScheduleHeapData<E> {
     pub schedule: CompiledSchedule,
     pub nodes_to_remove: Vec<NodeID>,
-    pub removed_nodes: Vec<NodeHeapData>,
-    pub new_node_processors: Vec<NodeHeapData>,
-    pub new_node_arena: Option<Arena<crate::processor::NodeEntry>>,
+    pub removed_nodes: Vec<NodeHeapData<E>>,
+    pub new_node_processors: Vec<NodeHeapData<E>>,
+    pub new_node_arena: Option<Arena<crate::processor::NodeEntry<E>>>,
 }
 
-impl ScheduleHeapData {
+impl<E> ScheduleHeapData<E> {
     pub fn new(
         schedule: CompiledSchedule,
         nodes_to_remove: Vec<NodeID>,
-        new_node_processors: Vec<NodeHeapData>,
-        new_node_arena: Option<Arena<crate::processor::NodeEntry>>,
+        new_node_processors: Vec<NodeHeapData<E>>,
+        new_node_arena: Option<Arena<crate::processor::NodeEntry<E>>>,
     ) -> Self {
         let num_nodes_to_remove = nodes_to_remove.len();
 
@@ -172,7 +172,7 @@ impl ScheduleHeapData {
     }
 }
 
-impl Debug for ScheduleHeapData {
+impl<E> Debug for ScheduleHeapData<E> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         let new_node_processors: Vec<NodeID> =
             self.new_node_processors.iter().map(|n| n.id).collect();
