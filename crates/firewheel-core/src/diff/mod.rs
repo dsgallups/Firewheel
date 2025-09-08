@@ -201,13 +201,15 @@
 //! However, if your invariants are safety-critical, you _must_
 //! implement [`Patch`] manually.
 
+use core::any::Any;
+
 use bevy_platform::sync::Arc;
 
 #[cfg(not(feature = "std"))]
 use bevy_platform::prelude::Vec;
 
 use crate::{
-    collector::ArcGc,
+    collector::{ArcGc, OwnedGc},
     event::{NodeEventType, ParamData},
 };
 
@@ -691,9 +693,9 @@ impl PathBuilder {
 }
 
 /// An event queue for diffing.
-pub trait EventQueue {
+pub trait EventQueue<E = OwnedGc<Box<dyn Any + Send + Sync>>> {
     /// Push an event to the queue.
-    fn push(&mut self, data: NodeEventType);
+    fn push(&mut self, data: NodeEventType<E>);
 
     /// Push an event to the queue.
     ///
@@ -708,8 +710,8 @@ pub trait EventQueue {
     }
 }
 
-impl EventQueue for Vec<NodeEventType> {
-    fn push(&mut self, data: NodeEventType) {
+impl<E> EventQueue<E> for Vec<NodeEventType<E>> {
+    fn push(&mut self, data: NodeEventType<E>) {
         self.push(data);
     }
 }

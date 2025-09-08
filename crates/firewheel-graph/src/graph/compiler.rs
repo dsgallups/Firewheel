@@ -13,10 +13,10 @@ mod schedule;
 pub use schedule::{CompiledSchedule, NodeHeapData, ScheduleHeapData};
 use schedule::{InBufferAssignment, OutBufferAssignment, ScheduledNode};
 
-pub struct NodeEntry {
+pub struct NodeEntry<E> {
     pub id: NodeID,
     pub info: AudioNodeInfoInner,
-    pub dyn_node: Box<dyn DynAudioNode>,
+    pub dyn_node: Box<dyn DynAudioNode<E>>,
     pub processor_constructed: bool,
     /// The edges connected to this node's input ports.
     incoming: SmallVec<[Edge; 4]>,
@@ -24,8 +24,8 @@ pub struct NodeEntry {
     outgoing: SmallVec<[Edge; 4]>,
 }
 
-impl NodeEntry {
-    pub fn new(info: AudioNodeInfoInner, dyn_node: Box<dyn DynAudioNode>) -> Self {
+impl<E> NodeEntry<E> {
+    pub fn new(info: AudioNodeInfoInner, dyn_node: Box<dyn DynAudioNode<E>>) -> Self {
         Self {
             id: NodeID::DANGLING,
             info,
@@ -118,8 +118,8 @@ impl BufferAllocator {
 }
 
 /// Main compilation algorithm
-pub fn compile(
-    nodes: &mut Arena<NodeEntry>,
+pub fn compile<E>(
+    nodes: &mut Arena<NodeEntry<E>>,
     edges: &mut Arena<Edge>,
     graph_in_id: NodeID,
     graph_out_id: NodeID,
@@ -133,8 +133,8 @@ pub fn compile(
     )
 }
 
-pub fn cycle_detected<'a>(
-    nodes: &'a mut Arena<NodeEntry>,
+pub fn cycle_detected<'a, E>(
+    nodes: &'a mut Arena<NodeEntry<E>>,
     edges: &'a mut Arena<Edge>,
     graph_in_id: NodeID,
     graph_out_id: NodeID,
@@ -150,8 +150,8 @@ pub fn cycle_detected<'a>(
 
 /// Internal IR used by the compiler algorithm. Built incrementally
 /// via the compiler passes.
-struct GraphIR<'a> {
-    nodes: &'a mut Arena<NodeEntry>,
+struct GraphIR<'a, E> {
+    nodes: &'a mut Arena<NodeEntry<E>>,
     edges: &'a mut Arena<Edge>,
 
     /// The topologically sorted schedule of the graph. Built internally.
@@ -166,11 +166,11 @@ struct GraphIR<'a> {
     max_block_frames: usize,
 }
 
-impl<'a> GraphIR<'a> {
+impl<'a, E> GraphIR<'a, E> {
     /// Construct a [GraphIR] instance from lists of nodes and edges, building
     /// up the adjacency table and creating an empty schedule.
     fn preprocess(
-        nodes: &'a mut Arena<NodeEntry>,
+        nodes: &'a mut Arena<NodeEntry<E>>,
         edges: &'a mut Arena<Edge>,
         graph_in_id: NodeID,
         graph_out_id: NodeID,

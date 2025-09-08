@@ -593,7 +593,7 @@ mod tests {
     };
 
     use crate::{
-        graph::{AudioGraph, EdgeID},
+        graph::{AudioGraph, CustomNodeEvent, EdgeID},
         FirewheelConfig,
     };
 
@@ -816,21 +816,19 @@ mod tests {
         verify_node(node6, &[false], 0, &schedule, &graph);
     }
 
-    fn add_dummy_node(graph: &mut AudioGraph, channel_config: impl Into<ChannelConfig>) -> NodeID {
-        graph.add_node(
-            DummyNode,
-            Some(DummyNodeConfig {
-                channel_config: channel_config.into(),
-            }),
-        )
+    fn add_dummy_node<E: CustomNodeEvent>(
+        graph: &mut AudioGraph<E>,
+        channel_config: impl Into<ChannelConfig>,
+    ) -> NodeID {
+        graph.add_node_constructor(E::dummy_node(channel_config.into()))
     }
 
-    fn verify_node(
+    fn verify_node<E>(
         node_id: NodeID,
         in_ports_that_should_clear: &[bool],
         num_sum_ins: usize,
         schedule: &CompiledSchedule,
-        graph: &AudioGraph,
+        graph: &AudioGraph<E>,
     ) {
         let node = graph.node_info(node_id).unwrap();
         let scheduled_node = schedule.schedule.iter().find(|&s| s.id == node_id).unwrap();
@@ -874,9 +872,9 @@ mod tests {
         }
     }
 
-    fn verify_edge(
+    fn verify_edge<E>(
         edge_id: EdgeID,
-        graph: &AudioGraph,
+        graph: &AudioGraph<E>,
         schedule: &CompiledSchedule,
         inserted_sum_idx: Option<usize>,
     ) {

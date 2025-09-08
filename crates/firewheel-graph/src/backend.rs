@@ -41,7 +41,7 @@ pub trait AudioBackend: Sized {
     fn start_stream(config: Self::Config) -> Result<(Self, StreamInfo), Self::StartStreamError>;
 
     /// Send the given processor to the audio thread for processing.
-    fn set_processor(&mut self, processor: FirewheelProcessor<Self>);
+    fn set_processor<E>(&mut self, processor: FirewheelProcessor<Self, E>);
 
     /// Poll the status of the running audio stream. Return an error if the
     /// audio stream has stopped for any reason.

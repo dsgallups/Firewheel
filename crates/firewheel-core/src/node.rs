@@ -1,3 +1,4 @@
+use core::marker::PhantomData;
 use core::ops::Range;
 use core::time::Duration;
 use core::{any::Any, fmt::Debug, hash::Hash, num::NonZeroU32};
@@ -220,7 +221,10 @@ pub trait AudioNode {
     ///
     /// * `configuration` - The custom configuration of this node.
     /// * `cx` - A context for interacting with the Firewheel context.
-    fn update(&mut self, configuration: &Self::Configuration, cx: UpdateContext) {
+    fn update(&mut self, configuration: &Self::Configuration, cx: UpdateContext<Self>)
+    where
+        Self: Sized,
+    {
         let _ = configuration;
         let _ = cx;
     }
@@ -346,7 +350,7 @@ impl<'a, E> UpdateContext<'a, E> {
 pub struct EmptyConfig;
 
 /// A type-erased dyn-compatible [`AudioNode`].
-pub trait DynAudioNode {
+pub trait DynAudioNode<E> {
     /// Get information about this node.
     ///
     /// This method is only called once after the node is added to the audio graph.
@@ -362,7 +366,7 @@ pub trait DynAudioNode {
     /// context will call this method on every update cycle.
     ///
     /// * `cx` - A context for interacting with the Firewheel context.
-    fn update(&mut self, cx: UpdateContext) {
+    fn update(&mut self, cx: UpdateContext<E>) {
         let _ = cx;
     }
 }
@@ -384,7 +388,7 @@ impl<T: AudioNode> Constructor<T, T::Configuration> {
     }
 }
 
-impl<T: AudioNode> DynAudioNode for Constructor<T, T::Configuration> {
+impl<T: AudioNode> DynAudioNode<T> for Constructor<T, T::Configuration> {
     fn info(&self) -> AudioNodeInfo {
         self.constructor.info(&self.configuration)
     }
@@ -396,7 +400,7 @@ impl<T: AudioNode> DynAudioNode for Constructor<T, T::Configuration> {
         )
     }
 
-    fn update(&mut self, cx: UpdateContext) {
+    fn update(&mut self, cx: UpdateContext<T>) {
         self.constructor.update(&self.configuration, cx);
     }
 }

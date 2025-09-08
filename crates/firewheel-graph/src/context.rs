@@ -5,6 +5,7 @@ use core::time::Duration;
 use core::{any::Any, f64};
 use firewheel_core::clock::DurationSeconds;
 use firewheel_core::log::{RealtimeLogger, RealtimeLoggerConfig, RealtimeLoggerMainThread};
+use firewheel_core::node::Constructor;
 use firewheel_core::{
     channel_config::{ChannelConfig, ChannelCount},
     clock::AudioClock,
@@ -23,6 +24,7 @@ use bevy_platform::prelude::Box;
 use bevy_platform::prelude::Vec;
 
 use crate::error::RemoveNodeError;
+use crate::graph::CustomNodeEvent;
 use crate::processor::BufferOutOfSpaceMode;
 use crate::{
     backend::{AudioBackend, DeviceInfo},
@@ -149,22 +151,22 @@ struct ActiveState<B: AudioBackend> {
 }
 
 /// A Firewheel context
-pub struct FirewheelCtx<B: AudioBackend> {
-    graph: AudioGraph,
+pub struct FirewheelCtx<B: AudioBackend, E> {
+    graph: AudioGraph<E>,
 
-    to_processor_tx: ringbuf::HeapProd<ContextToProcessorMsg>,
-    from_processor_rx: ringbuf::HeapCons<ProcessorToContextMsg>,
+    to_processor_tx: ringbuf::HeapProd<ContextToProcessorMsg<E>>,
+    from_processor_rx: ringbuf::HeapCons<ProcessorToContextMsg<E>>,
     logger_rx: RealtimeLoggerMainThread,
 
     active_state: Option<ActiveState<B>>,
 
     processor_channel: Option<(
-        ringbuf::HeapCons<ContextToProcessorMsg>,
-        ringbuf::HeapProd<ProcessorToContextMsg>,
+        ringbuf::HeapCons<ContextToProcessorMsg<E>>,
+        ringbuf::HeapProd<ProcessorToContextMsg<E>>,
         triple_buffer::Input<SharedClock<B::Instant>>,
         RealtimeLogger,
     )>,
-    processor_drop_rx: Option<ringbuf::HeapCons<FirewheelProcessorInner<B>>>,
+    processor_drop_rx: Option<ringbuf::HeapCons<FirewheelProcessorInner<B, E>>>,
 
     shared_clock_output: RefCell<triple_buffer::Output<SharedClock<B::Instant>>>,
     sample_rate: NonZeroU32,
@@ -176,8 +178,8 @@ pub struct FirewheelCtx<B: AudioBackend> {
     transport_state_alloc_reuse: Option<Box<TransportState>>,
 
     // Re-use the allocations for groups of events.
-    event_group_pool: Vec<Vec<NodeEvent>>,
-    event_group: Vec<NodeEvent>,
+    event_group_pool: Vec<Vec<NodeEvent<E>>>,
+    event_group: Vec<NodeEvent<E>>,
     initial_event_group_capacity: usize,
 
     #[cfg(feature = "scheduled_events")]
@@ -186,13 +188,14 @@ pub struct FirewheelCtx<B: AudioBackend> {
     config: FirewheelConfig,
 }
 
-impl<B: AudioBackend> FirewheelCtx<B> {
+impl<B: AudioBackend, E: CustomNodeEvent> FirewheelCtx<B, E> {
     /// Create a new Firewheel context.
     pub fn new(config: FirewheelConfig) -> Self {
         let (to_processor_tx, from_context_rx) =
-            ringbuf::HeapRb::<ContextToProcessorMsg>::new(config.channel_capacity as usize).split();
+            ringbuf::HeapRb::<ContextToProcessorMsg<E>>::new(config.channel_capacity as usize)
+                .split();
         let (to_context_tx, from_processor_rx) =
-            ringbuf::HeapRb::<ProcessorToContextMsg>::new(config.channel_capacity as usize * 2)
+            ringbuf::HeapRb::<ProcessorToContextMsg<E>>::new(config.channel_capacity as usize * 2)
                 .split();
 
         let initial_event_group_capacity = config.initial_event_group_capacity as usize;
@@ -229,7 +232,9 @@ impl<B: AudioBackend> FirewheelCtx<B> {
             config,
         }
     }
+}
 
+impl<B: AudioBackend, E> FirewheelCtx<B, E> {
     /// Get a reference to the currently active instance of the backend. Returns `None` if the backend has not
     /// yet been initialized with `start_stream`.
     pub fn active_backend(&self) -> Option<&B> {
@@ -319,7 +324,7 @@ impl<B: AudioBackend> FirewheelCtx<B> {
 
         let schedule = self.graph.compile(&stream_info)?;
 
-        let (drop_tx, drop_rx) = ringbuf::HeapRb::<FirewheelProcessorInner<B>>::new(1).split();
+        let (drop_tx, drop_rx) = ringbuf::HeapRb::<FirewheelProcessorInner<B, E>>::new(1).split();
 
         let processor = if let Some((from_context_rx, to_context_tx, shared_clock_input, logger)) =
             maybe_processor
@@ -716,16 +721,16 @@ impl<B: AudioBackend> FirewheelCtx<B> {
     }
 
     /// Add a node to the audio graph.
-    pub fn add_node<T: AudioNode + 'static>(
-        &mut self,
-        node: T,
-        config: Option<T::Configuration>,
-    ) -> NodeID {
+    pub fn add_node<T>(&mut self, node: T, config: Option<T::Configuration>) -> NodeID
+    where
+        T: AudioNode + 'static,
+        Constructor<T, T::Configuration>: DynAudioNode<E>,
+    {
         self.graph.add_node(node, config)
     }
 
     /// Add a node to the audio graph which implements the type-erased [`DynAudioNode`] trait.
-    pub fn add_dyn_node<T: DynAudioNode + 'static>(&mut self, node: T) -> NodeID {
+    pub fn add_dyn_node<T: DynAudioNode<E> + 'static>(&mut self, node: T) -> NodeID {
         self.graph.add_dyn_node(node)
     }
 
@@ -747,7 +752,7 @@ impl<B: AudioBackend> FirewheelCtx<B> {
     }
 
     /// Get information about a node in the graph.
-    pub fn node_info(&self, id: NodeID) -> Option<&NodeEntry> {
+    pub fn node_info(&self, id: NodeID) -> Option<&NodeEntry<E>> {
         self.graph.node_info(id)
     }
 
@@ -771,7 +776,7 @@ impl<B: AudioBackend> FirewheelCtx<B> {
     }
 
     /// Get a list of all the existing nodes in the graph.
-    pub fn nodes<'a>(&'a self) -> impl Iterator<Item = &'a NodeEntry> {
+    pub fn nodes<'a>(&'a self) -> impl Iterator<Item = &'a NodeEntry<E>> {
         self.graph.nodes()
     }
 
@@ -872,7 +877,7 @@ impl<B: AudioBackend> FirewheelCtx<B> {
     ///
     /// Note, this event will not be sent until the event queue is flushed
     /// in [`FirewheelCtx::update`].
-    pub fn queue_event(&mut self, event: NodeEvent) {
+    pub fn queue_event(&mut self, event: NodeEvent<E>) {
         self.event_group.push(event);
     }
 
@@ -880,7 +885,7 @@ impl<B: AudioBackend> FirewheelCtx<B> {
     ///
     /// Note, this event will not be sent until the event queue is flushed
     /// in [`FirewheelCtx::update`].
-    pub fn queue_event_for(&mut self, node_id: NodeID, event: NodeEventType) {
+    pub fn queue_event_for(&mut self, node_id: NodeID, event: NodeEventType<E>) {
         self.queue_event(NodeEvent {
             node_id,
             #[cfg(feature = "scheduled_events")]
@@ -900,7 +905,7 @@ impl<B: AudioBackend> FirewheelCtx<B> {
     pub fn schedule_event_for(
         &mut self,
         node_id: NodeID,
-        event: NodeEventType,
+        event: NodeEventType<E>,
         time: Option<EventInstant>,
     ) {
         self.queue_event(NodeEvent {
@@ -948,15 +953,15 @@ impl<B: AudioBackend> FirewheelCtx<B> {
 
     fn send_message_to_processor(
         &mut self,
-        msg: ContextToProcessorMsg,
-    ) -> Result<(), (ContextToProcessorMsg, UpdateError<B::StreamError>)> {
+        msg: ContextToProcessorMsg<E>,
+    ) -> Result<(), (ContextToProcessorMsg<E>, UpdateError<B::StreamError>)> {
         self.to_processor_tx
             .try_push(msg)
             .map_err(|msg| (msg, UpdateError::MsgChannelFull))
     }
 }
 
-impl<B: AudioBackend> Drop for FirewheelCtx<B> {
+impl<B: AudioBackend, E> Drop for FirewheelCtx<B, E> {
     fn drop(&mut self) {
         self.stop_stream();
 
@@ -979,9 +984,9 @@ impl<B: AudioBackend> Drop for FirewheelCtx<B> {
     }
 }
 
-impl<B: AudioBackend> FirewheelCtx<B> {
+impl<B: AudioBackend, E> FirewheelCtx<B, E> {
     /// Construct an [`ContextQueue`] for diffing.
-    pub fn event_queue(&mut self, id: NodeID) -> ContextQueue<'_, B> {
+    pub fn event_queue(&mut self, id: NodeID) -> ContextQueue<'_, B, E> {
         ContextQueue {
             context: self,
             id,
@@ -995,7 +1000,7 @@ impl<B: AudioBackend> FirewheelCtx<B> {
         &mut self,
         id: NodeID,
         time: Option<EventInstant>,
-    ) -> ContextQueue<'_, B> {
+    ) -> ContextQueue<'_, B, E> {
         ContextQueue {
             context: self,
             id,
@@ -1024,22 +1029,22 @@ impl<B: AudioBackend> FirewheelCtx<B> {
 /// params.diff(baseline, PathBuilder::default(), &mut queue);
 /// # }
 /// ```
-pub struct ContextQueue<'a, B: AudioBackend> {
-    context: &'a mut FirewheelCtx<B>,
+pub struct ContextQueue<'a, B: AudioBackend, E> {
+    context: &'a mut FirewheelCtx<B, E>,
     id: NodeID,
     #[cfg(feature = "scheduled_events")]
     time: Option<EventInstant>,
 }
 
 #[cfg(feature = "scheduled_events")]
-impl<'a, B: AudioBackend> ContextQueue<'a, B> {
+impl<'a, B: AudioBackend, E> ContextQueue<'a, B, E> {
     pub fn time(&self) -> Option<EventInstant> {
         self.time
     }
 }
 
-impl<B: AudioBackend> firewheel_core::diff::EventQueue for ContextQueue<'_, B> {
-    fn push(&mut self, data: NodeEventType) {
+impl<B: AudioBackend, E> firewheel_core::diff::EventQueue<E> for ContextQueue<'_, B, E> {
+    fn push(&mut self, data: NodeEventType<E>) {
         self.context.queue_event(NodeEvent {
             event: data,
             #[cfg(feature = "scheduled_events")]

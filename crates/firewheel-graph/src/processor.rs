@@ -40,12 +40,12 @@ mod transport;
 #[cfg(feature = "musical_transport")]
 use transport::ProcTransportState;
 
-pub struct FirewheelProcessor<B: AudioBackend> {
-    inner: Option<FirewheelProcessorInner<B>>,
-    drop_tx: ringbuf::HeapProd<FirewheelProcessorInner<B>>,
+pub struct FirewheelProcessor<B: AudioBackend, E> {
+    inner: Option<FirewheelProcessorInner<B, E>>,
+    drop_tx: ringbuf::HeapProd<FirewheelProcessorInner<B, E>>,
 }
 
-impl<B: AudioBackend> Drop for FirewheelProcessor<B> {
+impl<B: AudioBackend, E> Drop for FirewheelProcessor<B, E> {
     fn drop(&mut self) {
         let Some(mut inner) = self.inner.take() else {
             return;
@@ -63,10 +63,10 @@ impl<B: AudioBackend> Drop for FirewheelProcessor<B> {
     }
 }
 
-impl<B: AudioBackend> FirewheelProcessor<B> {
+impl<B: AudioBackend, E> FirewheelProcessor<B, E> {
     pub(crate) fn new(
-        processor: FirewheelProcessorInner<B>,
-        drop_tx: ringbuf::HeapProd<FirewheelProcessorInner<B>>,
+        processor: FirewheelProcessorInner<B, E>,
+        drop_tx: ringbuf::HeapProd<FirewheelProcessorInner<B, E>>,
     ) -> Self {
         Self {
             inner: Some(processor),
@@ -86,12 +86,12 @@ impl<B: AudioBackend> FirewheelProcessor<B> {
     }
 }
 
-pub(crate) struct FirewheelProcessorInner<B: AudioBackend> {
+pub(crate) struct FirewheelProcessorInner<B: AudioBackend, E> {
     nodes: Arena<NodeEntry>,
     schedule_data: Option<Box<ScheduleHeapData>>,
 
-    from_graph_rx: ringbuf::HeapCons<ContextToProcessorMsg>,
-    to_graph_tx: ringbuf::HeapProd<ProcessorToContextMsg>,
+    from_graph_rx: ringbuf::HeapCons<ContextToProcessorMsg<E>>,
+    to_graph_tx: ringbuf::HeapProd<ProcessorToContextMsg<E>>,
 
     event_scheduler: EventScheduler,
     proc_event_queue: Vec<ProcEventsIndex>,
@@ -117,11 +117,11 @@ pub(crate) struct FirewheelProcessorInner<B: AudioBackend> {
     debug_force_clear_buffers: bool,
 }
 
-impl<B: AudioBackend> FirewheelProcessorInner<B> {
+impl<B: AudioBackend, E> FirewheelProcessorInner<B, E> {
     /// Note, this method gets called on the main thread, not the audio thread.
     pub(crate) fn new(
-        from_graph_rx: ringbuf::HeapCons<ContextToProcessorMsg>,
-        to_graph_tx: ringbuf::HeapProd<ProcessorToContextMsg>,
+        from_graph_rx: ringbuf::HeapCons<ContextToProcessorMsg<E>>,
+        to_graph_tx: ringbuf::HeapProd<ProcessorToContextMsg<E>>,
         shared_clock_input: triple_buffer::Input<SharedClock<B::Instant>>,
         immediate_event_buffer_capacity: usize,
         #[cfg(feature = "scheduled_events")] scheduled_event_buffer_capacity: usize,
@@ -169,8 +169,8 @@ pub(crate) struct NodeEntry {
     event_data: NodeEventSchedulerData,
 }
 
-pub(crate) enum ContextToProcessorMsg {
-    EventGroup(Vec<NodeEvent>),
+pub(crate) enum ContextToProcessorMsg<E> {
+    EventGroup(Vec<NodeEvent<E>>),
     NewSchedule(Box<ScheduleHeapData>),
     HardClipOutputs(bool),
     #[cfg(feature = "musical_transport")]
@@ -179,8 +179,8 @@ pub(crate) enum ContextToProcessorMsg {
     ClearScheduledEvents(SmallVec<[ClearScheduledEventsEvent; 1]>),
 }
 
-pub(crate) enum ProcessorToContextMsg {
-    ReturnEventGroup(Vec<NodeEvent>),
+pub(crate) enum ProcessorToContextMsg<E> {
+    ReturnEventGroup(Vec<NodeEvent<E>>),
     ReturnSchedule(Box<ScheduleHeapData>),
     #[cfg(feature = "musical_transport")]
     ReturnTransportState(Box<TransportState>),

@@ -4,11 +4,15 @@ use core::any::Any;
 use bevy_platform::prelude::{Box, Vec};
 
 use crate::{
+    channel_config::{ChannelConfig, ChannelCount},
     clock::{DurationSamples, DurationSeconds, InstantSamples, InstantSeconds},
     collector::{ArcGc, OwnedGc},
     diff::{Notify, ParamPath},
     dsp::volume::Volume,
-    node::NodeID,
+    node::{
+        dummy::{DummyNode, DummyNodeConfig},
+        AudioNode, Constructor, NodeID,
+    },
     vector::{Vec2, Vec3},
 };
 
