@@ -27,6 +27,8 @@ pub trait AudioBackend: Sized {
     /// A type describing an instant in time.
     type Instant: Send + Clone;
 
+    type ProcessorEvent;
+
     /// Return a list of the available input devices.
     fn available_input_devices() -> Vec<DeviceInfo> {
         Vec::new()
@@ -41,7 +43,7 @@ pub trait AudioBackend: Sized {
     fn start_stream(config: Self::Config) -> Result<(Self, StreamInfo), Self::StartStreamError>;
 
     /// Send the given processor to the audio thread for processing.
-    fn set_processor<E>(&mut self, processor: FirewheelProcessor<Self, E>);
+    fn set_processor(&mut self, processor: FirewheelProcessor<Self, Self::ProcessorEvent>);
 
     /// Poll the status of the running audio stream. Return an error if the
     /// audio stream has stopped for any reason.

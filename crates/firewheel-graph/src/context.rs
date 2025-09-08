@@ -151,7 +151,7 @@ struct ActiveState<B: AudioBackend> {
 }
 
 /// A Firewheel context
-pub struct FirewheelCtx<B: AudioBackend, E: 'static> {
+pub struct FirewheelCtx<B: AudioBackend<ProcessorEvent = E>, E: 'static> {
     graph: AudioGraph<E>,
 
     to_processor_tx: ringbuf::HeapProd<ContextToProcessorMsg<E>>,
@@ -188,7 +188,7 @@ pub struct FirewheelCtx<B: AudioBackend, E: 'static> {
     config: FirewheelConfig,
 }
 
-impl<B: AudioBackend, E: CustomNodeEvent> FirewheelCtx<B, E> {
+impl<B: AudioBackend<ProcessorEvent = E>, E: CustomNodeEvent> FirewheelCtx<B, E> {
     /// Create a new Firewheel context.
     pub fn new(config: FirewheelConfig) -> Self {
         let (to_processor_tx, from_context_rx) =
@@ -234,7 +234,7 @@ impl<B: AudioBackend, E: CustomNodeEvent> FirewheelCtx<B, E> {
     }
 }
 
-impl<B: AudioBackend, E: 'static> FirewheelCtx<B, E> {
+impl<B: AudioBackend<ProcessorEvent = E>, E: 'static> FirewheelCtx<B, E> {
     /// Get a reference to the currently active instance of the backend. Returns `None` if the backend has not
     /// yet been initialized with `start_stream`.
     pub fn active_backend(&self) -> Option<&B> {
@@ -961,7 +961,7 @@ impl<B: AudioBackend, E: 'static> FirewheelCtx<B, E> {
     }
 }
 
-impl<B: AudioBackend, E: 'static> Drop for FirewheelCtx<B, E> {
+impl<B: AudioBackend<ProcessorEvent = E>, E: 'static> Drop for FirewheelCtx<B, E> {
     fn drop(&mut self) {
         self.stop_stream();
 
@@ -984,7 +984,7 @@ impl<B: AudioBackend, E: 'static> Drop for FirewheelCtx<B, E> {
     }
 }
 
-impl<B: AudioBackend, E> FirewheelCtx<B, E> {
+impl<B: AudioBackend<ProcessorEvent = E>, E> FirewheelCtx<B, E> {
     /// Construct an [`ContextQueue`] for diffing.
     pub fn event_queue(&mut self, id: NodeID) -> ContextQueue<'_, B, E> {
         ContextQueue {
@@ -1029,7 +1029,7 @@ impl<B: AudioBackend, E> FirewheelCtx<B, E> {
 /// params.diff(baseline, PathBuilder::default(), &mut queue);
 /// # }
 /// ```
-pub struct ContextQueue<'a, B: AudioBackend, E: 'static> {
+pub struct ContextQueue<'a, B: AudioBackend<ProcessorEvent = E>, E: 'static> {
     context: &'a mut FirewheelCtx<B, E>,
     id: NodeID,
     #[cfg(feature = "scheduled_events")]
@@ -1037,13 +1037,15 @@ pub struct ContextQueue<'a, B: AudioBackend, E: 'static> {
 }
 
 #[cfg(feature = "scheduled_events")]
-impl<'a, B: AudioBackend, E> ContextQueue<'a, B, E> {
+impl<'a, B: AudioBackend<ProcessorEvent = E>, E> ContextQueue<'a, B, E> {
     pub fn time(&self) -> Option<EventInstant> {
         self.time
     }
 }
 
-impl<B: AudioBackend, E> firewheel_core::diff::EventQueue<E> for ContextQueue<'_, B, E> {
+impl<B: AudioBackend<ProcessorEvent = E>, E> firewheel_core::diff::EventQueue<E>
+    for ContextQueue<'_, B, E>
+{
     fn push(&mut self, data: NodeEventType<E>) {
         self.context.queue_event(NodeEvent {
             event: data,

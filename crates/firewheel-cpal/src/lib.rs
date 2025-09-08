@@ -151,18 +151,19 @@ impl Default for CpalConfig {
 }
 
 /// A CPAL backend for Firewheel
-pub struct CpalBackend {
+pub struct CpalBackend<E: Send + 'static> {
     from_err_rx: mpsc::Receiver<cpal::StreamError>,
-    to_stream_tx: ringbuf::HeapProd<CtxToStreamMsg>,
+    to_stream_tx: ringbuf::HeapProd<CtxToStreamMsg<E>>,
     _out_stream_handle: cpal::Stream,
     _in_stream_handle: Option<cpal::Stream>,
 }
 
-impl AudioBackend for CpalBackend {
+impl<E: Send + 'static> AudioBackend for CpalBackend<E> {
     type Config = CpalConfig;
     type StartStreamError = StreamStartError;
     type StreamError = cpal::StreamError;
     type Instant = bevy_platform::time::Instant;
+    type ProcessorEvent = E;
 
     fn available_input_devices() -> Vec<DeviceInfo> {
         let mut devices = Vec::with_capacity(8);
@@ -468,7 +469,7 @@ impl AudioBackend for CpalBackend {
         };
 
         let (to_stream_tx, from_cx_rx) =
-            ringbuf::HeapRb::<CtxToStreamMsg>::new(MSG_CHANNEL_CAPACITY).split();
+            ringbuf::HeapRb::<CtxToStreamMsg<E>>::new(MSG_CHANNEL_CAPACITY).split();
 
         let mut data_callback = DataCallback::new(
             num_out_channels,
@@ -520,7 +521,7 @@ impl AudioBackend for CpalBackend {
         ))
     }
 
-    fn set_processor(&mut self, processor: FirewheelProcessor<Self>) {
+    fn set_processor(&mut self, processor: FirewheelProcessor<Self, Self::ProcessorEvent>) {
         if let Err(_) = self
             .to_stream_tx
             .try_push(CtxToStreamMsg::NewProcessor(processor))
@@ -737,10 +738,10 @@ enum StartInputStreamResult {
     },
 }
 
-struct DataCallback {
+struct DataCallback<E: Send + 'static> {
     num_out_channels: usize,
-    from_cx_rx: ringbuf::HeapCons<CtxToStreamMsg>,
-    processor: Option<FirewheelProcessor<CpalBackend>>,
+    from_cx_rx: ringbuf::HeapCons<CtxToStreamMsg<E>>,
+    processor: Option<FirewheelProcessor<CpalBackend<E>, E>>,
     sample_rate: u32,
     sample_rate_recip: f64,
     //_first_internal_clock_instant: Option<cpal::StreamInstant>,
@@ -752,11 +753,11 @@ struct DataCallback {
     input_buffer: Vec<f32>,
 }
 
-impl DataCallback {
+impl<E: Send + 'static> DataCallback<E> {
     fn new(
         num_out_channels: usize,
         max_block_frames: usize,
-        from_cx_rx: ringbuf::HeapCons<CtxToStreamMsg>,
+        from_cx_rx: ringbuf::HeapCons<CtxToStreamMsg<E>>,
         sample_rate: u32,
         input_stream_cons: Option<fixed_resample::ResamplingCons<f32>>,
     ) -> Self {
@@ -926,8 +927,8 @@ impl DataCallback {
     }
 }
 
-enum CtxToStreamMsg {
-    NewProcessor(FirewheelProcessor<CpalBackend>),
+enum CtxToStreamMsg<E: Send + 'static> {
+    NewProcessor(FirewheelProcessor<CpalBackend<E>, E>),
 }
 
 /// An error occured while trying to start a CPAL audio stream.
